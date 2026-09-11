@@ -56,7 +56,7 @@ function MainApp() {
     ) {
       return path;
     }
-    return '/auth';
+    return '/guest-dashboard';
   });
 
   const [hostActiveTab, setHostActiveTab] = useState<HostViewTab>(() => {
@@ -188,9 +188,15 @@ function MainApp() {
   }
 
   // -------------------------------------------------------------
-  // View 1: Auth Portal (Root /auth or unauthenticated)
+  // View 1: Auth Portal (Explicit /auth route or unauthenticated access to protected host/admin routes)
   // -------------------------------------------------------------
-  if (!currentUser?.isAuthenticated || currentRoute === '/auth') {
+  const isProtectedHostOrAdminRoute =
+    currentRoute === '/admin-dashboard' ||
+    currentRoute === '/host-dashboard' ||
+    currentRoute === '/host/new-listing' ||
+    currentRoute === '/host/payout-settings';
+
+  if (currentRoute === '/auth' || (!currentUser?.isAuthenticated && isProtectedHostOrAdminRoute)) {
     return (
       <AuthPortal
         onSuccess={handleAuthSuccess}

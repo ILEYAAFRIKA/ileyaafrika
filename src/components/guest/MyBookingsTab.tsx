@@ -35,8 +35,8 @@ export const MyBookingsTab: React.FC<MyBookingsTabProps> = ({
   }, [myBookings]);
 
   // Split into Upcoming Trips vs Past Bookings based on checkout date
-  const upcomingTrips = uniqueBookings.filter((b) => b.checkOutDate >= today);
-  const pastBookings = uniqueBookings.filter((b) => b.checkOutDate < today);
+  const upcomingTrips = uniqueBookings.filter((b) => (b?.checkOutDate || '') >= today);
+  const pastBookings = uniqueBookings.filter((b) => (b?.checkOutDate || '') < today);
 
   // If no bookings at all, render the requested empty state
   if (uniqueBookings.length === 0) {

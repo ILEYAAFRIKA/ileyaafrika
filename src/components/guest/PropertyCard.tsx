@@ -22,6 +22,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   listing,
   onSelectAndBook,
 }) => {
+  if (!listing) return null;
+
   const isAvailable = !listing.isBooked;
 
   const mainPhoto =
@@ -29,13 +31,23 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
     (listing.images && listing.images.length > 0 && listing.images[0]) ||
     'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80';
 
+  const price = Number(listing.pricePerDay || (listing as any).price || 0);
+  const title = listing.title || 'Verified Apartment';
+  const state = listing.state || 'Lagos';
+  const cityArea = listing.cityArea || 'Lekki Phase 1';
+  const description =
+    listing.description ||
+    'Physically audited short-let apartment with 24/7 power, treated water, and verified security.';
+  const propertyType = listing.propertyType || 'Entire Apartment';
+  const amenities = Array.isArray(listing.amenities) ? listing.amenities : [];
+
   return (
     <div className="bg-white rounded-2xl border border-[#1B4332]/10 overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 flex flex-col group">
       {/* Property Image Container */}
       <div className="relative aspect-4/3 w-full bg-[#14231C] overflow-hidden">
         <img
           src={mainPhoto}
-          alt={listing.title}
+          alt={title}
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
@@ -66,7 +78,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
         {/* Property Type Floating Pill */}
         <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium">
-          {listing.propertyType}
+          {propertyType}
         </div>
       </div>
 
@@ -77,24 +89,24 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           <div className="flex items-center gap-1 text-xs font-semibold text-[#2D6A4F]">
             <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2D6A4F]" />
             <span className="truncate">
-              {listing.cityArea}, {listing.state} State
+              {cityArea}, {state} State
             </span>
           </div>
 
           {/* Title */}
           <h3 className="text-base font-bold font-serif text-[#14231C] line-clamp-1 group-hover:text-[#1B4332] transition-colors">
-            {listing.title}
+            {title}
           </h3>
 
           {/* Brief Snippet */}
           <p className="text-xs text-[#6B756F] line-clamp-2 leading-relaxed">
-            {listing.description}
+            {description}
           </p>
 
           {/* Key Amenities Preview */}
-          {listing.amenities && listing.amenities.length > 0 && (
+          {amenities.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {listing.amenities.slice(0, 3).map((amenity, i) => (
+              {amenities.slice(0, 3).map((amenity, i) => (
                 <span
                   key={i}
                   className="px-2 py-0.5 rounded-md bg-[#FBF6EC] border border-[#1B4332]/10 text-[10px] font-medium text-[#1B4332]"
@@ -102,9 +114,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                   {amenity}
                 </span>
               ))}
-              {listing.amenities.length > 3 && (
+              {amenities.length > 3 && (
                 <span className="text-[10px] text-[#6B756F] self-center">
-                  +{listing.amenities.length - 3} more
+                  +{amenities.length - 3} more
                 </span>
               )}
             </div>
@@ -117,7 +129,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             <span className="text-xs text-[#6B756F] block">Daily Rate</span>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-bold font-serif text-[#1B4332]">
-                ₦{listing.pricePerDay.toLocaleString()}
+                ₦{price.toLocaleString()}
               </span>
               <span className="text-[11px] text-[#6B756F]">/ day</span>
             </div>
@@ -126,7 +138,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           <button
             type="button"
             onClick={() => onSelectAndBook(listing)}
-            id={`select-book-${listing.id}`}
+            id={`select-book-${listing.id || 'default'}`}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-[#E8A33D] hover:bg-[#d99530] text-[#14231C] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <span>Select & Book</span>

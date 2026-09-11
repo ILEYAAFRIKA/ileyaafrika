@@ -4,6 +4,7 @@ import {
   Compass,
   ShieldCheck,
   LogOut,
+  LogIn,
   User,
   Luggage,
   Sparkles
@@ -114,10 +115,19 @@ export const GuestHeader: React.FC<GuestHeaderProps> = ({
             onClick={onLogout}
             id="guest-logout-btn"
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer shadow-xs"
-            title="Sign Out of Ileya"
+            title={session?.isAuthenticated ? 'Sign Out of Ileya' : 'Sign In to Ileya'}
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
+            {session?.isAuthenticated ? (
+              <>
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign In</span>
+              </>
+            )}
           </button>
         </div>
       </div>

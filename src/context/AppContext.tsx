@@ -9,7 +9,7 @@ import {
   BankPayoutDetails,
   GuestBooking,
 } from '../types';
-import { INITIAL_BANK_SETTINGS } from '../data/nigerianData';
+import { INITIAL_BANK_SETTINGS, INITIAL_VERIFIED_LISTINGS } from '../data/nigerianData';
 import {
   syncUserToSupabase,
   getUserFromSupabase,
@@ -104,7 +104,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 3. Listings state
   const [listings, setListingsState] = useState<PropertyListing[]>(() => {
-    return getStoredItem<PropertyListing[]>(STORAGE_KEYS.LISTINGS, []);
+    const stored = getStoredItem<PropertyListing[]>(STORAGE_KEYS.LISTINGS, []);
+    if (stored && stored.length > 0) return stored;
+    return INITIAL_VERIFIED_LISTINGS;
   });
 
   // 4. Admin Emails state
@@ -153,14 +155,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Real-time Supabase Auth listener & loading barrier
   useEffect(() => {
+    // Safety timer: ensure loading barrier NEVER gets stuck indefinitely
+    const safetyTimer = setTimeout(() => {
+      setAuthLoading(false);
+    }, 1500);
+
     // Check current session on mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await handleUserSession(session.user);
-      } else {
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        if (session?.user) {
+          await handleUserSession(session.user);
+        } else {
+          setAuthLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Supabase auth session check notice:', err);
         setAuthLoading(false);
-      }
-    });
+      });
 
     // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -227,6 +240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return () => {
+      clearTimeout(safetyTimer);
       authListener?.subscription?.unsubscribe();
     };
   }, []);

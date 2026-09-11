@@ -96,22 +96,25 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   // Active Booking History State - Filtered for current guest if logged in
   // Deduplicated by unique booking id so duplicate UI elements are avoided
   const userBookings = useMemo(() => {
-    const list = bookings.length > 0 ? bookings : contextBookings;
+    const rawList = Array.isArray(bookings) && bookings.length > 0 ? bookings : (Array.isArray(contextBookings) ? contextBookings : []);
+    const safeList = rawList.filter((b): b is GuestBooking => Boolean(b && typeof b === 'object' && b.id));
+
     const filtered = session?.email
-      ? list.filter(
-          (b) => !b.guestEmail || b.guestEmail.toLowerCase() === session.email.toLowerCase()
+      ? safeList.filter(
+          (b) => !b.guestEmail || String(b.guestEmail).toLowerCase() === String(session.email).toLowerCase()
         )
-      : list;
+      : safeList;
 
     // Deduplicate strictly by unique booking id to force React to ignore duplicate records
     const uniqueMap = new Map<string, GuestBooking>();
     for (const item of filtered) {
+      if (!item || !item.id) continue;
       if (!uniqueMap.has(item.id)) {
         // Check for duplicate payment reference as secondary safeguard
         const hasRefMatch = item.paymentReference
           ? Array.from(uniqueMap.values()).some(
               (existing) =>
-                existing.paymentReference &&
+                existing?.paymentReference &&
                 existing.paymentReference === item.paymentReference
             )
           : false;
@@ -145,35 +148,46 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
 
   // STRICT REQUIREMENT: Only show listings where status === 'approved_live' or 'approved'
   const approvedListings = useMemo(() => {
-    return listings.filter((item) => item.status === 'approved_live' || item.status === 'approved');
+    if (!Array.isArray(listings)) return [];
+    return listings.filter(
+      (item) => item && (item.status === 'approved_live' || item.status === 'approved' || !item.status)
+    );
   }, [listings]);
 
   // Derived Cities/Areas based on selected state from approved listings
   const availableCities = useMemo(() => {
     const list = approvedListings
-      .filter((l) => selectedState === 'All' || l.state.toLowerCase() === selectedState.toLowerCase())
-      .map((l) => l.cityArea.trim())
-      .filter((city, index, self) => self.indexOf(city) === index && city.length > 0);
+      .filter((l) => {
+        if (!l) return false;
+        if (selectedState === 'All') return true;
+        const itemState = String(l.state || '').toLowerCase();
+        return itemState === selectedState.toLowerCase();
+      })
+      .map((l) => String(l?.cityArea || '').trim())
+      .filter((city, index, self) => city.length > 0 && self.indexOf(city) === index);
     return list;
   }, [approvedListings, selectedState]);
 
   // Filtered Approved Listings
   const filteredListings = useMemo(() => {
     return approvedListings.filter((listing) => {
+      if (!listing) return false;
+
       // 1. State Filter
       if (selectedState !== 'All') {
-        if (listing.state.toLowerCase() !== selectedState.toLowerCase()) {
+        const itemState = String(listing.state || '').toLowerCase();
+        if (itemState !== selectedState.toLowerCase()) {
           return false;
         }
       }
 
       // 2. City / Keyword Search Query
-      if (searchCityQuery.trim()) {
+      if (searchCityQuery && searchCityQuery.trim()) {
         const query = searchCityQuery.toLowerCase().trim();
-        const matchesCity = listing.cityArea.toLowerCase().includes(query);
-        const matchesTitle = listing.title.toLowerCase().includes(query);
-        const matchesAddress = listing.streetAddress.toLowerCase().includes(query);
-        const matchesState = listing.state.toLowerCase().includes(query);
+        const matchesCity = String(listing.cityArea || '').toLowerCase().includes(query);
+        const matchesTitle = String(listing.title || '').toLowerCase().includes(query);
+        const matchesAddress = String(listing.streetAddress || '').toLowerCase().includes(query);
+        const matchesState = String(listing.state || '').toLowerCase().includes(query);
         if (!matchesCity && !matchesTitle && !matchesAddress && !matchesState) {
           return false;
         }
@@ -189,7 +203,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   }, [approvedListings, selectedState, searchCityQuery, onlyAvailable]);
 
   // Available count
-  const availableCount = approvedListings.filter((l) => !l.isBooked).length;
+  const availableCount = approvedListings.filter((l) => l && !l.isBooked).length;
 
   // Handle successful reservation after Paystack payment callback
   const handleBookingConfirmed = (bookingData: GuestBooking | {
@@ -443,13 +457,16 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
               {/* Grid of Verified Property Cards */}
               {filteredListings.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredListings.map((listing) => (
-                    <PropertyCard
-                      key={listing.id}
-                      listing={listing}
-                      onSelectAndBook={(item) => setSelectedListingForBooking(item)}
-                    />
-                  ))}
+                  {filteredListings.map((listing, idx) => {
+                    if (!listing) return null;
+                    return (
+                      <PropertyCard
+                        key={listing.id || `prop-${idx}`}
+                        listing={listing}
+                        onSelectAndBook={(item) => setSelectedListingForBooking(item)}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 /* Graceful Empty State */

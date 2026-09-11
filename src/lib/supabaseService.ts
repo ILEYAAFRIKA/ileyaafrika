@@ -605,17 +605,31 @@ export function subscribeToPayoutSettings(onUpdate: (payouts: Record<string, Ban
     if (Object.keys(map).length > 0) {
       onUpdate(map);
     }
-  });
+  }).catch((err) => console.warn('Initial payout fetch notice:', err));
 
-  const channel = supabase
-    .channel('public:payout_settings')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'payout_settings' }, () => {
-      getAllPayoutDetailsFromSupabase().then(onUpdate);
-    })
-    .subscribe();
+  let channel: any = null;
+  try {
+    const channelName = `payouts_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payout_settings' }, () => {
+        getAllPayoutDetailsFromSupabase().then(onUpdate).catch((err) => console.warn('Payout refresh notice:', err));
+      })
+      .subscribe((status, err) => {
+        if (err) console.warn('Payouts realtime status:', status, err);
+      });
+  } catch (err) {
+    console.warn('Could not create payouts realtime channel:', err);
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (removeErr) {
+        console.warn('Error removing payouts channel:', removeErr);
+      }
+    }
   };
 }
 
@@ -623,79 +637,77 @@ export function subscribeToPayoutSettings(onUpdate: (payouts: Record<string, Ban
  * Subscribe to Real-Time Listings from Supabase
  */
 export function subscribeToListings(onUpdate: (listings: PropertyListing[]) => void): () => void {
+  const mapListingRow = (row: any): PropertyListing => ({
+    id: row.id,
+    title: row.title || 'Verified Apartment',
+    description: row.description || '',
+    propertyType: row.property_type || 'Apartment',
+    pricePerDay: Number(row.price_per_day || row.price || 0),
+    state: row.state || 'Lagos',
+    cityArea: row.city_area || row.city || '',
+    streetAddress: row.street_address || '',
+    amenities: Array.isArray(row.amenities) ? row.amenities : [],
+    photos: Array.isArray(row.photos) && row.photos.length > 0 ? row.photos : (Array.isArray(row.images) ? row.images : []),
+    images: Array.isArray(row.images) && row.images.length > 0 ? row.images : (Array.isArray(row.photos) ? row.photos : []),
+    hostWhatsApp: row.host_whatsapp || '+2348000000000',
+    hostFullName: row.host_full_name || 'Verified Host',
+    hostEmail: row.host_email || '',
+    hostBankDetails: row.host_bank_details,
+    status: row.status || 'approved_live',
+    isPhysicallyVerified: row.is_physically_verified ?? true,
+    isBooked: row.is_booked ?? false,
+    createdAt: row.created_at || new Date().toISOString(),
+    verificationNotes: row.verification_notes,
+    rejectionReason: row.rejection_reason,
+  });
+
   // Initial fetch
   supabase
     .from('listings')
     .select('*')
-    .then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
-        const mapped = data.map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          propertyType: row.property_type,
-          pricePerDay: Number(row.price_per_day),
-          state: row.state,
-          cityArea: row.city_area,
-          streetAddress: row.street_address,
-          amenities: row.amenities || [],
-          photos: row.photos || row.images || [],
-          images: row.images || row.photos || [],
-          hostWhatsApp: row.host_whatsapp,
-          hostFullName: row.host_full_name,
-          hostEmail: row.host_email,
-          hostBankDetails: row.host_bank_details,
-          status: row.status,
-          isPhysicallyVerified: row.is_physically_verified,
-          isBooked: row.is_booked,
-          createdAt: row.created_at,
-          verificationNotes: row.verification_notes,
-          rejectionReason: row.rejection_reason,
-        }));
-        onUpdate(mapped);
-      }
-    });
+    .then(
+      ({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          onUpdate(data.map(mapListingRow));
+        }
+      },
+      (err) => console.warn('Initial listings fetch notice:', err)
+    );
 
-  const channel = supabase
-    .channel('public:listings')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'listings' }, () => {
-      // Re-fetch all on change
-      supabase
-        .from('listings')
-        .select('*')
-        .then(({ data, error }) => {
-          if (!error && data) {
-            const mapped = data.map((row: any) => ({
-              id: row.id,
-              title: row.title,
-              description: row.description,
-              propertyType: row.property_type,
-              pricePerDay: Number(row.price_per_day),
-              state: row.state,
-              cityArea: row.city_area,
-              streetAddress: row.street_address,
-              amenities: row.amenities || [],
-              photos: row.photos || row.images || [],
-              images: row.images || row.photos || [],
-              hostWhatsApp: row.host_whatsapp,
-              hostFullName: row.host_full_name,
-              hostEmail: row.host_email,
-              hostBankDetails: row.host_bank_details,
-              status: row.status,
-              isPhysicallyVerified: row.is_physically_verified,
-              isBooked: row.is_booked,
-              createdAt: row.created_at,
-              verificationNotes: row.verification_notes,
-              rejectionReason: row.rejection_reason,
-            }));
-            onUpdate(mapped);
-          }
-        });
-    })
-    .subscribe();
+  let channel: any = null;
+  try {
+    const channelName = `listings_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'listings' }, () => {
+        // Re-fetch all on change
+        supabase
+          .from('listings')
+          .select('*')
+          .then(
+            ({ data, error }) => {
+              if (!error && data) {
+                onUpdate(data.map(mapListingRow));
+              }
+            },
+            (err) => console.warn('Listings refresh notice:', err)
+          );
+      })
+      .subscribe((status, err) => {
+        if (err) console.warn('Listings realtime status:', status, err);
+      });
+  } catch (err) {
+    console.warn('Could not create listings realtime channel:', err);
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (removeErr) {
+        console.warn('Error removing listings channel:', removeErr);
+      }
+    }
   };
 }
 
@@ -735,29 +747,49 @@ export function subscribeToBookings(onUpdate: (bookings: GuestBooking[]) => void
     .from('bookings')
     .select('*')
     .order('booked_at', { ascending: false })
-    .then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
-        onUpdate(data.map(mapBookingRow));
-      }
-    });
+    .then(
+      ({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          onUpdate(data.map(mapBookingRow));
+        }
+      },
+      (err) => console.warn('Initial bookings fetch notice:', err)
+    );
 
-  const channel = supabase
-    .channel('public:bookings')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-      supabase
-        .from('bookings')
-        .select('*')
-        .order('booked_at', { ascending: false })
-        .then(({ data, error }) => {
-          if (!error && data) {
-            onUpdate(data.map(mapBookingRow));
-          }
-        });
-    })
-    .subscribe();
+  let channel: any = null;
+  try {
+    const channelName = `bookings_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        supabase
+          .from('bookings')
+          .select('*')
+          .order('booked_at', { ascending: false })
+          .then(
+            ({ data, error }) => {
+              if (!error && data) {
+                onUpdate(data.map(mapBookingRow));
+              }
+            },
+            (err) => console.warn('Bookings refresh notice:', err)
+          );
+      })
+      .subscribe((status, err) => {
+        if (err) console.warn('Bookings realtime status:', status, err);
+      });
+  } catch (err) {
+    console.warn('Could not create bookings realtime channel:', err);
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (removeErr) {
+        console.warn('Error removing bookings channel:', removeErr);
+      }
+    }
   };
 }
 
@@ -769,28 +801,48 @@ export function subscribeToAdminEmails(onUpdate: (emails: string[]) => void): ()
   supabase
     .from('admin_emails')
     .select('email')
-    .then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
-        onUpdate(data.map((r: any) => r.email));
-      }
-    });
+    .then(
+      ({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          onUpdate(data.map((r: any) => r.email));
+        }
+      },
+      (err) => console.warn('Initial admin emails fetch notice:', err)
+    );
 
-  const channel = supabase
-    .channel('public:admin_emails')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_emails' }, () => {
-      supabase
-        .from('admin_emails')
-        .select('email')
-        .then(({ data, error }) => {
-          if (!error && data) {
-            onUpdate(data.map((r: any) => r.email));
-          }
-        });
-    })
-    .subscribe();
+  let channel: any = null;
+  try {
+    const channelName = `admin_emails_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_emails' }, () => {
+        supabase
+          .from('admin_emails')
+          .select('email')
+          .then(
+            ({ data, error }) => {
+              if (!error && data) {
+                onUpdate(data.map((r: any) => r.email));
+              }
+            },
+            (err) => console.warn('Admin emails refresh notice:', err)
+          );
+      })
+      .subscribe((status, err) => {
+        if (err) console.warn('Admin emails realtime status:', status, err);
+      });
+  } catch (err) {
+    console.warn('Could not create admin emails realtime channel:', err);
+  }
 
   return () => {
-    supabase.removeChannel(channel);
+    if (channel) {
+      try {
+        supabase.removeChannel(channel);
+      } catch (removeErr) {
+        console.warn('Error removing admin emails channel:', removeErr);
+      }
+    }
   };
 }
 
