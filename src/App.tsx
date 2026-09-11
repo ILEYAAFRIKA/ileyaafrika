@@ -94,31 +94,32 @@ function MainApp() {
   // Update route on session changes
   useEffect(() => {
     if (!loading && currentUser?.isAuthenticated) {
-      if (currentUser.role === 'master_admin' || currentUser.role === 'admin') {
+      if (currentUser?.role === 'master_admin' || currentUser?.role === 'admin') {
         if (currentRoute === '/auth') setCurrentRoute('/admin-dashboard');
-      } else if (currentUser.role === 'host') {
+      } else if (currentUser?.role === 'host') {
         if (currentRoute === '/auth') setCurrentRoute('/host-dashboard');
-      } else if (currentUser.role === 'guest') {
+      } else if (currentUser?.role === 'guest') {
         if (currentRoute === '/auth') setCurrentRoute('/guest-dashboard');
       }
     }
   }, [currentUser, loading, currentRoute]);
 
   // Handle successful login/signup from AuthPortal
-  const handleAuthSuccess = (data: { role: UserRole; fullName: string; email: string }) => {
-    const isMaster = data.role === 'master_admin' || data.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+  const handleAuthSuccess = (data: { role?: UserRole; fullName: string; email: string }) => {
+    const userRole = data?.role || 'guest';
+    const isMaster = userRole === 'master_admin' || (data?.email && data.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase());
     const userSession: UserSession = {
-      fullName: data.fullName,
-      email: data.email,
-      role: data.role,
+      fullName: data?.fullName || '',
+      email: data?.email || '',
+      role: userRole,
       isMasterAdmin: isMaster,
       isAuthenticated: true,
     };
     setCurrentUser(userSession);
 
-    if (data.role === 'master_admin' || data.role === 'admin') {
+    if (userRole === 'master_admin' || userRole === 'admin') {
       navigateTo('/admin-dashboard');
-    } else if (data.role === 'guest') {
+    } else if (userRole === 'guest') {
       navigateTo('/guest-dashboard');
     } else {
       setHostActiveTab('listings');
@@ -211,10 +212,21 @@ function MainApp() {
   // View 2: Full Admin Operations Dashboard (/admin-dashboard)
   // -------------------------------------------------------------
   if (
-    currentUser.role === 'admin' ||
-    currentUser.role === 'master_admin' ||
-    currentRoute === '/admin-dashboard'
+    currentRoute === '/admin-dashboard' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'master_admin'
   ) {
+    if (!currentUser?.isAuthenticated || (currentUser?.role !== 'admin' && currentUser?.role !== 'master_admin')) {
+      return (
+        <AuthPortal
+          onSuccess={handleAuthSuccess}
+          currentPath="/admin-dashboard"
+          onNavigate={navigateTo}
+          adminEmails={adminEmails}
+        />
+      );
+    }
+
     return (
       <AdminDashboard
         session={currentUser}
@@ -237,11 +249,22 @@ function MainApp() {
   // View 3: Host Partner Portal (/host-dashboard)
   // -------------------------------------------------------------
   if (
-    currentUser.role === 'host' ||
     currentRoute === '/host-dashboard' ||
     currentRoute === '/host/new-listing' ||
-    currentRoute === '/host/payout-settings'
+    currentRoute === '/host/payout-settings' ||
+    currentUser?.role === 'host'
   ) {
+    if (!currentUser?.isAuthenticated || currentUser?.role !== 'host') {
+      return (
+        <AuthPortal
+          onSuccess={handleAuthSuccess}
+          currentPath={currentRoute}
+          onNavigate={navigateTo}
+          adminEmails={adminEmails}
+        />
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#FBF6EC] text-[#14231C] flex flex-col">
         {/* Top Host Navigation Header */}

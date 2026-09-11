@@ -303,9 +303,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     syncUserToSupabase(newUser);
 
-    const isMaster = newUser.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
-    const isAdmin = adminEmails.some((a) => a.toLowerCase() === newUser.email.toLowerCase());
-    const finalRole: UserRole = isMaster ? 'master_admin' : (isAdmin ? 'admin' : newUser.role);
+    const isMaster = (newUser?.email || '').toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+    const isAdmin = adminEmails.some((a) => a.toLowerCase() === (newUser?.email || '').toLowerCase());
+    const finalRole: UserRole = isMaster ? 'master_admin' : (isAdmin ? 'admin' : (newUser?.role || 'guest'));
 
     const newSession: UserSession = {
       uid: newUser.uid || newUser.id,

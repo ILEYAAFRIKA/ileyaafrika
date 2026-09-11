@@ -57,11 +57,11 @@ export async function getUserByEmailFromSupabase(email: string): Promise<Registe
 export async function saveUserDocToSupabase(user: RegisteredUser): Promise<void> {
   try {
     const record = {
-      uid: user.uid || user.id,
-      email: user.email.trim().toLowerCase(),
-      full_name: user.fullName,
-      role: user.role,
-      created_at: user.createdAt || new Date().toISOString(),
+      uid: user?.uid || user?.id || '',
+      email: user?.email ? user.email.trim().toLowerCase() : '',
+      full_name: user?.fullName || '',
+      role: user?.role || 'guest',
+      created_at: user?.createdAt || new Date().toISOString(),
     };
 
     const { error } = await supabase
