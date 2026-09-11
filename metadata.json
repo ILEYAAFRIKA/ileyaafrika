@@ -1,0 +1,6 @@
+{
+  "name": "Ileya",
+  "description": "A Nigerian-based short-let platform connecting travelers to physically verified apartments.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
