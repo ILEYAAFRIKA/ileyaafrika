@@ -23,7 +23,14 @@ import { MyBookingsTab } from './MyBookingsTab';
 import { PropertyListing, UserSession, GuestViewTab, GuestBooking } from '../../types';
 import { NIGERIAN_STATES } from '../../data/nigerianData';
 import { useApp } from '../../context/AppContext';
-import { getAllBookingsFromSupabase, subscribeToBookings } from '../../lib/supabaseService';
+import {
+  getAllBookingsFromSupabase,
+  subscribeToBookings,
+  getUnavailableListingIdsForDates,
+  formatDateToYYYYMMDD,
+} from '../../lib/supabaseService';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 interface GuestDashboardProps {
   session: UserSession | null;
@@ -131,7 +138,10 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   // Search & Filter States (Explore Tab)
   const [selectedState, setSelectedState] = useState<string>('All');
   const [searchCityQuery, setSearchCityQuery] = useState<string>('');
-  const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
+  const [searchCheckInDate, setSearchCheckInDate] = useState<Date | null>(null);
+  const [searchCheckOutDate, setSearchCheckOutDate] = useState<Date | null>(null);
+  const [unavailableListingIds, setUnavailableListingIds] = useState<Set<string>>(new Set());
+  const [isCheckingDates, setIsCheckingDates] = useState<boolean>(false);
 
   // Modal States
   const [selectedListingForBooking, setSelectedListingForBooking] = useState<PropertyListing | null>(null);
@@ -145,6 +155,55 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
       nights: number;
     };
   } | null>(null);
+
+  // Search Page Date Filter:
+  // If the user searches for properties using specific dates on the home page,
+  // query Supabase bookings table to filter out properties that have overlapping 'completed' bookings.
+  useEffect(() => {
+    let isCurrent = true;
+
+    const queryUnavailableForDates = async () => {
+      if (!searchCheckInDate || !searchCheckOutDate || searchCheckOutDate <= searchCheckInDate) {
+        setUnavailableListingIds(new Set());
+        return;
+      }
+
+      setIsCheckingDates(true);
+      const checkInStr = formatDateToYYYYMMDD(searchCheckInDate);
+      const checkOutStr = formatDateToYYYYMMDD(searchCheckOutDate);
+
+      try {
+        const blockedIds = await getUnavailableListingIdsForDates(checkInStr, checkOutStr);
+        if (isCurrent) {
+          setUnavailableListingIds(new Set(blockedIds));
+        }
+      } catch (err) {
+        console.warn('Could not query unavailable listings for dates:', err);
+        // Fallback to active memory bookings
+        const blockedIds = (bookings || [])
+          .filter(
+            (b) =>
+              (b.paymentStatus === 'completed' || (b as any).payment_status === 'completed') &&
+              b.checkInDate < checkOutStr &&
+              b.checkOutDate > checkInStr
+          )
+          .map((b) => b.listingId);
+        if (isCurrent) {
+          setUnavailableListingIds(new Set(blockedIds));
+        }
+      } finally {
+        if (isCurrent) {
+          setIsCheckingDates(false);
+        }
+      }
+    };
+
+    queryUnavailableForDates();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [searchCheckInDate, searchCheckOutDate, bookings]);
 
   // STRICT REQUIREMENT: Only show listings where status === 'approved_live' or 'approved'
   const approvedListings = useMemo(() => {
@@ -169,6 +228,10 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   }, [approvedListings, selectedState]);
 
   // Filtered Approved Listings
+  // Deprecate is_booked toggle:
+  // Stop hiding properties from the main directory based on an is_booked status.
+  // All properties should always be visible in the "All Apartments" view.
+  // Availability is now strictly determined by the bookings table.
   const filteredListings = useMemo(() => {
     return approvedListings.filter((listing) => {
       if (!listing) return false;
@@ -193,17 +256,20 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
         }
       }
 
-      // 3. Availability Filter
-      if (onlyAvailable && listing.isBooked) {
-        return false;
+      // 3. Search Page Date Filter:
+      // Exclude listings that have overlapping completed bookings for requested dates
+      if (searchCheckInDate && searchCheckOutDate && searchCheckOutDate > searchCheckInDate) {
+        if (unavailableListingIds.has(listing.id)) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [approvedListings, selectedState, searchCityQuery, onlyAvailable]);
+  }, [approvedListings, selectedState, searchCityQuery, searchCheckInDate, searchCheckOutDate, unavailableListingIds]);
 
-  // Available count
-  const availableCount = approvedListings.filter((l) => l && !l.isBooked).length;
+  // Available count: total matching current search criteria
+  const availableCount = filteredListings.length;
 
   // Handle successful reservation after Paystack payment callback
   const handleBookingConfirmed = (bookingData: GuestBooking | {
@@ -218,8 +284,8 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   }) => {
     if (!selectedListingForBooking) return;
 
-    // 1. Update listing status to Booked in platform state
-    onBookListing(bookingData.listingId);
+    // Do NOT call onBookListing to permanently toggle is_booked.
+    // Availability is strictly determined by the bookings table per reservation dates.
 
     // Reuse existing booking ID if already provided from Paystack checkout, or generate once
     const bookingId = bookingData.id || `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -323,7 +389,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                     </h1>
                   </div>
                   <p className="text-xs text-[#6B756F] mt-1 max-w-2xl leading-relaxed">
-                    Every apartment on Ileya is physically visited and audited for generator uptime, running water, high-speed WiFi, and security before being published.
+                    Every apartment on Ileya Afrika is physically visited and audited for generator uptime, running water, high-speed WiFi, and security before being published.
                   </p>
                 </div>
 
@@ -346,93 +412,161 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Form Controls: State, City Search, and Available-Only Toggle */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-3 border-t border-[#1B4332]/10">
-                {/* State Select Dropdown */}
-                <div className="md:col-span-4">
-                  <label
-                    htmlFor="guest-state-select"
-                    className="block text-[11px] font-bold text-[#14231C] mb-1"
-                  >
-                    Select State
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F]">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <select
-                      id="guest-state-select"
-                      value={selectedState}
-                      onChange={(e) => setSelectedState(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
+              {/* Form Controls: State, City Search, and Date-based Availability */}
+              <div className="space-y-3 pt-3 border-t border-[#1B4332]/10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3">
+                  {/* State Select Dropdown */}
+                  <div className="sm:col-span-1 md:col-span-3">
+                    <label
+                      htmlFor="guest-state-select"
+                      className="block text-[11px] font-bold text-[#14231C] mb-1"
                     >
-                      <option value="All">All Nigerian States ({approvedListings.length} total)</option>
-                      {NIGERIAN_STATES.map((state) => (
-                        <option key={state} value={state}>
-                          {state}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* City / Area Search Input */}
-                <div className="md:col-span-5">
-                  <label
-                    htmlFor="guest-city-search"
-                    className="block text-[11px] font-bold text-[#14231C] mb-1"
-                  >
-                    Search City, Area, or Property (e.g. Lekki, Maitama, Ikeja)
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F]">
-                      <Search className="w-4 h-4" />
-                    </div>
-                    <input
-                      id="guest-city-search"
-                      type="text"
-                      value={searchCityQuery}
-                      onChange={(e) => setSearchCityQuery(e.target.value)}
-                      placeholder="Type city or landmark..."
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] placeholder-[#6B756F]/60 focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
-                    />
-                    {searchCityQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchCityQuery('')}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-[#6B756F] hover:text-[#14231C] cursor-pointer"
+                      Select State
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F]">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <select
+                        id="guest-state-select"
+                        value={selectedState}
+                        onChange={(e) => setSelectedState(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
                       >
-                        Clear
-                      </button>
-                    )}
+                        <option value="All">All Nigerian States ({approvedListings.length} total)</option>
+                        {NIGERIAN_STATES.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* City / Area Search Input */}
+                  <div className="sm:col-span-1 md:col-span-3">
+                    <label
+                      htmlFor="guest-city-search"
+                      className="block text-[11px] font-bold text-[#14231C] mb-1"
+                    >
+                      City, Area, or Landmark
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F]">
+                        <Search className="w-4 h-4" />
+                      </div>
+                      <input
+                        id="guest-city-search"
+                        type="text"
+                        value={searchCityQuery}
+                        onChange={(e) => setSearchCityQuery(e.target.value)}
+                        placeholder="e.g. Lekki, Maitama..."
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] placeholder-[#6B756F]/60 focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
+                      />
+                      {searchCityQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchCityQuery('')}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-[#6B756F] hover:text-[#14231C] cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Search Check-In Date */}
+                  <div className="sm:col-span-1 md:col-span-3">
+                    <label className="block text-[11px] font-bold text-[#14231C] mb-1">
+                      Check-In Date
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F] z-10">
+                        <Calendar className="w-4 h-4" />
+                      </div>
+                      <DatePicker
+                        selected={searchCheckInDate}
+                        onChange={(date: Date | null) => {
+                          setSearchCheckInDate(date);
+                          if (date && searchCheckOutDate && date >= searchCheckOutDate) {
+                            const nextDay = new Date(date);
+                            nextDay.setDate(nextDay.getDate() + 1);
+                            setSearchCheckOutDate(nextDay);
+                          }
+                        }}
+                        selectsStart
+                        startDate={searchCheckInDate}
+                        endDate={searchCheckOutDate}
+                        minDate={new Date()}
+                        placeholderText="Check-in date"
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
+                        dateFormat="MMM d, yyyy"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Search Check-Out Date */}
+                  <div className="sm:col-span-1 md:col-span-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-[#14231C]">
+                        Check-Out Date
+                      </label>
+                      {(searchCheckInDate || searchCheckOutDate) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchCheckInDate(null);
+                            setSearchCheckOutDate(null);
+                          }}
+                          className="text-[10px] text-[#2D6A4F] hover:underline font-bold cursor-pointer"
+                        >
+                          Clear Dates
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B756F] z-10">
+                        <Calendar className="w-4 h-4" />
+                      </div>
+                      <DatePicker
+                        selected={searchCheckOutDate}
+                        onChange={(date: Date | null) => setSearchCheckOutDate(date)}
+                        selectsEnd
+                        startDate={searchCheckInDate}
+                        endDate={searchCheckOutDate}
+                        minDate={searchCheckInDate ? new Date(searchCheckInDate.getTime() + 86400000) : new Date()}
+                        placeholderText="Check-out date"
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332]"
+                        dateFormat="MMM d, yyyy"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Only Show Available vs All Verified Toggle */}
-                <div className="md:col-span-3 flex flex-col justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setOnlyAvailable(!onlyAvailable)}
-                    id="toggle-available-filter-btn"
-                    className={`w-full py-2.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border ${
-                      onlyAvailable
-                        ? 'bg-[#2D6A4F] text-white border-[#2D6A4F] shadow-xs'
-                        : 'bg-white text-[#14231C] border-[#1B4332]/20 hover:bg-[#FBF6EC]'
-                    }`}
-                  >
+                {/* Active Date Query Indicator */}
+                {searchCheckInDate && searchCheckOutDate && searchCheckOutDate > searchCheckInDate && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs text-emerald-950">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          onlyAvailable ? 'bg-emerald-300' : 'bg-[#6B756F]'
-                        }`}
-                      />
-                      <span>Only Show Available</span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                      <span>
+                        Filtering availability for <strong>{searchCheckInDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</strong> – <strong>{searchCheckOutDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                      </span>
+                      {isCheckingDates && (
+                        <span className="text-[10px] text-emerald-700 italic font-mono">(querying Supabase bookings...)</span>
+                      )}
                     </div>
-                    <span className="text-[10px] font-mono opacity-80">
-                      {onlyAvailable ? 'ON' : 'ALL'}
-                    </span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchCheckInDate(null);
+                        setSearchCheckOutDate(null);
+                      }}
+                      className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                    >
+                      Reset Dates (Show All Apartments)
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -442,10 +576,10 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                 <div className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-[#2D6A4F]" />
                   <h2 className="text-lg font-bold font-serif text-[#1B4332]">
-                    Verified Apartments
+                    {searchCheckInDate && searchCheckOutDate ? 'Available Apartments' : 'All Apartments'}
                   </h2>
                   <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#1B4332]/10 text-[#1B4332]">
-                    {filteredListings.length} {filteredListings.length === 1 ? 'result' : 'results'}
+                    {filteredListings.length} {filteredListings.length === 1 ? 'apartment' : 'apartments'}
                   </span>
                 </div>
 
@@ -484,19 +618,22 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                     <p className="text-xs text-[#6B756F] leading-relaxed">
                       {approvedListings.length === 0
                         ? 'Our quality assurance team is currently on-ground conducting physical audits of newly registered host properties. Check back shortly!'
+                        : searchCheckInDate && searchCheckOutDate
+                        ? `No apartments are available for your chosen dates (${formatDateToYYYYMMDD(searchCheckInDate)} to ${formatDateToYYYYMMDD(searchCheckOutDate)}). Try adjusting your dates or resetting the date filter to see all apartments.`
                         : `We couldn't find any approved short-lets matching your filter (${selectedState}${
                             searchCityQuery ? `, query: "${searchCityQuery}"` : ''
                           }). Try selecting "All Nigerian States" or clearing your search.`}
                     </p>
                   </div>
 
-                  {(selectedState !== 'All' || searchCityQuery || onlyAvailable) && (
+                  {(selectedState !== 'All' || searchCityQuery || searchCheckInDate || searchCheckOutDate) && (
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedState('All');
                         setSearchCityQuery('');
-                        setOnlyAvailable(false);
+                        setSearchCheckInDate(null);
+                        setSearchCheckOutDate(null);
                       }}
                       className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#E8A33D] hover:bg-[#d99530] text-[#14231C] transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs"
                     >
@@ -548,7 +685,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
       <footer className="border-t border-[#1B4332]/10 bg-white/60 py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B756F]">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-[#1B4332]">Ileya Guest Hub</span>
+            <span className="font-serif font-bold text-[#1B4332]">Ileya Afrika Guest Hub</span>
             <span>•</span>
             <span>100% On-Ground Physical Verification Guarantee</span>
           </div>

@@ -103,7 +103,6 @@ export async function saveListingToSupabase(listing: PropertyListing): Promise<v
       host_bank_details: listing.hostBankDetails,
       status: listing.status,
       is_physically_verified: listing.isPhysicallyVerified,
-      is_booked: listing.isBooked,
       created_at: listing.createdAt,
       verification_notes: listing.verificationNotes,
       rejection_reason: listing.rejectionReason,
@@ -145,7 +144,6 @@ export async function updateListingInSupabase(id: string, updates: Partial<Prope
     if (updates.images !== undefined) payload.images = updates.images;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.isPhysicallyVerified !== undefined) payload.is_physically_verified = updates.isPhysicallyVerified;
-    if (updates.isBooked !== undefined) payload.is_booked = updates.isBooked;
     if (updates.verificationNotes !== undefined) payload.verification_notes = updates.verificationNotes;
     if (updates.rejectionReason !== undefined) payload.rejection_reason = updates.rejectionReason;
 
@@ -316,6 +314,243 @@ export async function insertBookingToSupabase(params: CreateBookingParams): Prom
 }
 
 /**
+ * Safe local Date parsing avoiding UTC midnight shift bugs
+ */
+export function parseLocalDate(dateStr: string | Date | null | undefined): Date {
+  if (!dateStr) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  }
+  if (dateStr instanceof Date) {
+    const d = new Date(dateStr.getTime());
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  const cleanStr = String(dateStr).split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    return new Date(year, month, day, 0, 0, 0, 0);
+  }
+  const fallback = new Date(dateStr);
+  fallback.setHours(0, 0, 0, 0);
+  return fallback;
+}
+
+/**
+ * Format local Date to strict YYYY-MM-DD string
+ */
+export function formatDateToYYYYMMDD(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Fetch all completed bookings for a specific listing from Supabase
+ * Specifically filters where payment_status = 'completed'
+ */
+export async function getCompletedBookingsForListing(listingId: string): Promise<GuestBooking[]> {
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('listing_id', listingId)
+      .eq('payment_status', 'completed');
+
+    if (error) {
+      console.warn('Supabase getCompletedBookingsForListing warning:', error.message);
+      // Fallback: fetch without status filter if payment_status column has mixed casing
+      const { data: fallbackData } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('listing_id', listingId);
+
+      const filtered = (fallbackData || []).filter(
+        (row: any) =>
+          String(row.payment_status || '').toLowerCase() === 'completed' ||
+          String(row.status || '').toLowerCase() === 'confirmed'
+      );
+
+      return filtered.map((row: any) => ({
+        id: row.id,
+        listingId: row.listing_id,
+        listingTitle: row.listing_title,
+        listingPhoto: row.listing_photo,
+        propertyType: row.property_type,
+        state: row.state,
+        cityArea: row.city_area,
+        streetAddress: row.street_address,
+        hostFullName: row.host_full_name,
+        hostWhatsApp: row.host_whatsapp,
+        hostEmail: row.host_email,
+        guestFullName: row.guest_full_name,
+        guestEmail: row.guest_email,
+        guestPhone: row.guest_phone,
+        checkInDate: row.check_in_date,
+        checkOutDate: row.check_out_date,
+        guestsCount: row.guests_count,
+        totalPrice: row.total_price || row.total_amount || 0,
+        totalAmount: row.total_amount || row.total_price || 0,
+        nights: row.nights,
+        bookedAt: row.booked_at,
+        status: row.status,
+        paymentStatus: row.payment_status || 'completed',
+        paymentReference: row.payment_reference || '',
+      }));
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      listingId: row.listing_id,
+      listingTitle: row.listing_title,
+      listingPhoto: row.listing_photo,
+      propertyType: row.property_type,
+      state: row.state,
+      cityArea: row.city_area,
+      streetAddress: row.street_address,
+      hostFullName: row.host_full_name,
+      hostWhatsApp: row.host_whatsapp,
+      hostEmail: row.host_email,
+      guestFullName: row.guest_full_name,
+      guestEmail: row.guest_email,
+      guestPhone: row.guest_phone,
+      checkInDate: row.check_in_date,
+      checkOutDate: row.check_out_date,
+      guestsCount: row.guests_count,
+      totalPrice: row.total_price || row.total_amount || 0,
+      totalAmount: row.total_amount || row.total_price || 0,
+      nights: row.nights,
+      bookedAt: row.booked_at,
+      status: row.status,
+      paymentStatus: row.payment_status || 'completed',
+      paymentReference: row.payment_reference || '',
+    }));
+  } catch (err) {
+    console.error('Supabase getCompletedBookingsForListing error:', err);
+    return [];
+  }
+}
+
+/**
+ * Strict Pre-Payment Double-Booking Guard:
+ * Query Supabase bookings table to check if any 'completed' bookings overlap with
+ * the requested [checkInDate, checkOutDate] for the specified listing.
+ * An overlap exists if: check_in_date < requestedCheckOut AND check_out_date > requestedCheckIn
+ */
+export async function checkBookingOverlap(
+  listingId: string,
+  checkInDate: string,
+  checkOutDate: string
+): Promise<{ hasOverlap: boolean; overlappingBookings: GuestBooking[] }> {
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('listing_id', listingId)
+      .eq('payment_status', 'completed')
+      .lt('check_in_date', checkOutDate)
+      .gt('check_out_date', checkInDate);
+
+    if (error) {
+      console.warn('Supabase checkBookingOverlap direct query warning, falling back to local verification:', error.message);
+      // Fallback: fetch listing completed bookings and check in JavaScript
+      const completed = await getCompletedBookingsForListing(listingId);
+      const overlapping = completed.filter((b) => {
+        return b.checkInDate < checkOutDate && b.checkOutDate > checkInDate;
+      });
+      return {
+        hasOverlap: overlapping.length > 0,
+        overlappingBookings: overlapping,
+      };
+    }
+
+    const mapped: GuestBooking[] = (data || []).map((row: any) => ({
+      id: row.id,
+      listingId: row.listing_id,
+      listingTitle: row.listing_title,
+      listingPhoto: row.listing_photo,
+      propertyType: row.property_type,
+      state: row.state,
+      cityArea: row.city_area,
+      streetAddress: row.street_address,
+      hostFullName: row.host_full_name,
+      hostWhatsApp: row.host_whatsapp,
+      hostEmail: row.host_email,
+      guestFullName: row.guest_full_name,
+      guestEmail: row.guest_email,
+      guestPhone: row.guest_phone,
+      checkInDate: row.check_in_date,
+      checkOutDate: row.check_out_date,
+      guestsCount: row.guests_count,
+      totalPrice: row.total_price || row.total_amount || 0,
+      totalAmount: row.total_amount || row.total_price || 0,
+      nights: row.nights,
+      bookedAt: row.booked_at,
+      status: row.status,
+      paymentStatus: row.payment_status || 'completed',
+      paymentReference: row.payment_reference || '',
+    }));
+
+    return {
+      hasOverlap: mapped.length > 0,
+      overlappingBookings: mapped,
+    };
+  } catch (err) {
+    console.error('Supabase checkBookingOverlap exception:', err);
+    return { hasOverlap: false, overlappingBookings: [] };
+  }
+}
+
+/**
+ * Search Page Date Filter Query:
+ * Fetch all listing_ids that have overlapping 'completed' bookings for the requested date window.
+ * Any property ID returned is unavailable for those dates and should be filtered out from the directory.
+ */
+export async function getUnavailableListingIdsForDates(
+  checkInDate: string,
+  checkOutDate: string
+): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('listing_id, check_in_date, check_out_date')
+      .eq('payment_status', 'completed')
+      .lt('check_in_date', checkOutDate)
+      .gt('check_out_date', checkInDate);
+
+    if (error) {
+      console.warn('Supabase getUnavailableListingIdsForDates warning:', error.message);
+      // Fallback: fetch all completed bookings and filter
+      const { data: allBookings } = await supabase
+        .from('bookings')
+        .select('listing_id, check_in_date, check_out_date, payment_status');
+
+      const overlappingIds = (allBookings || [])
+        .filter(
+          (b: any) =>
+            String(b.payment_status || '').toLowerCase() === 'completed' &&
+            b.check_in_date < checkOutDate &&
+            b.check_out_date > checkInDate
+        )
+        .map((b: any) => b.listing_id);
+
+      return Array.from(new Set(overlappingIds.filter(Boolean)));
+    }
+
+    const ids = (data || []).map((row: any) => row.listing_id);
+    return Array.from(new Set(ids.filter(Boolean)));
+  } catch (err) {
+    console.error('Supabase getUnavailableListingIdsForDates exception:', err);
+    return [];
+  }
+}
+
+/**
  * Fetch all bookings for a specific listing from Supabase
  */
 export async function getBookingsForListing(listingId: string): Promise<GuestBooking[]> {
@@ -443,7 +678,6 @@ export async function getAllListingsFromSupabase(): Promise<PropertyListing[]> {
       hostBankDetails: row.host_bank_details,
       status: row.status,
       isPhysicallyVerified: row.is_physically_verified,
-      isBooked: row.is_booked,
       createdAt: row.created_at,
       verificationNotes: row.verification_notes,
       rejectionReason: row.rejection_reason,
@@ -655,7 +889,6 @@ export function subscribeToListings(onUpdate: (listings: PropertyListing[]) => v
     hostBankDetails: row.host_bank_details,
     status: row.status || 'approved_live',
     isPhysicallyVerified: row.is_physically_verified ?? true,
-    isBooked: row.is_booked ?? false,
     createdAt: row.created_at || new Date().toISOString(),
     verificationNotes: row.verification_notes,
     rejectionReason: row.rejection_reason,

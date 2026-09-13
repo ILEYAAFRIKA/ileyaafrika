@@ -206,14 +206,14 @@ export const HostPayoutSettings: React.FC<HostPayoutSettingsProps> = ({
               <span>Automatic Settlement Notice</span>
             </div>
             <p className="text-xs text-[#6B756F] leading-relaxed">
-              Payouts are remitted to this account automatically after every verified guest checkout, minus Ileya&apos;s platform commission.
+              Payouts are remitted to this account automatically after every verified guest checkout, minus Ileya Afrika&apos;s platform commission.
             </p>
           </div>
 
           {/* Commission & Security Notes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="p-3 bg-white border border-[#1B4332]/10 rounded-xl">
-              <span className="font-bold text-[#1B4332]">Ileya Host Commission:</span>
+              <span className="font-bold text-[#1B4332]">Ileya Afrika Host Commission:</span>
               <p className="text-[#6B756F] text-[11px] mt-0.5">
                 Standard 10% platform fee covers payment processing, 24/7 physical verification, and guest support.
               </p>

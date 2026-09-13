@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { usePaystackPayment } from '../../lib/paystack';
@@ -18,10 +18,17 @@ import {
   Phone,
   Mail,
   User,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { PropertyListing, GuestBooking } from '../../types';
-import { insertBookingToSupabase, getBookingsForListing } from '../../lib/supabaseService';
+import {
+  insertBookingToSupabase,
+  getCompletedBookingsForListing,
+  checkBookingOverlap,
+  parseLocalDate,
+  formatDateToYYYYMMDD,
+} from '../../lib/supabaseService';
 import { useApp } from '../../context/AppContext';
 
 export interface BookNowProps {
@@ -133,42 +140,57 @@ export const BookNow: React.FC<BookNowProps> = ({
   // Interaction and UI states
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [bookedIntervals, setBookedIntervals] = useState<{ start: Date; end: Date }[]>([]);
+  const [completedBookings, setCompletedBookings] = useState<GuestBooking[]>([]);
   const [completedBooking, setCompletedBooking] = useState<GuestBooking | null>(null);
 
-  // Fetch existing bookings to prevent date collision
-  useEffect(() => {
-    let isMounted = true;
-    const fetchListingBookings = async () => {
-      if (!listing.id) return;
-      try {
-        const existing = await getBookingsForListing(listing.id);
-        if (isMounted) {
-          const activeBookings = existing.filter((b) => b.status !== 'cancelled');
-          const intervals = activeBookings
-            .map((b) => {
-              const start = new Date(b.checkInDate);
-              const end = new Date(b.checkOutDate);
-              start.setHours(0, 0, 0, 0);
-              end.setHours(0, 0, 0, 0);
-              return { start, end };
-            })
-            .filter(
-              (interval) =>
-                !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
-            );
-          setBookedIntervals(intervals);
-        }
-      } catch (err) {
-        console.warn('Could not fetch existing bookings:', err);
-      }
-    };
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+  }, []);
 
-    fetchListingBookings();
-    return () => {
-      isMounted = false;
-    };
+  // Fetch existing completed bookings to block dates on the calendar
+  const fetchListingBookings = useCallback(async () => {
+    if (!listing.id) return;
+    try {
+      // Fetch all records from the bookings table for this specific listing_id where payment_status = 'completed'
+      const completed = await getCompletedBookingsForListing(listing.id);
+      setCompletedBookings(completed);
+      const intervals = completed
+        .map((b) => {
+          const start = parseLocalDate(b.checkInDate);
+          const end = parseLocalDate(b.checkOutDate);
+          return { start, end };
+        })
+        .filter(
+          (interval) =>
+            !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
+        );
+      setBookedIntervals(intervals);
+
+      // Advance initial check-in date if it overlaps with any existing booking
+      setCheckInDate((currentCheckIn) => {
+        if (!currentCheckIn) return currentCheckIn;
+        const isOverlap = intervals.some(
+          (inv) => currentCheckIn >= inv.start && currentCheckIn < inv.end
+        );
+        if (isOverlap) {
+          const nextDay = new Date(currentCheckIn);
+          while (intervals.some((inv) => nextDay >= inv.start && nextDay < inv.end)) {
+            nextDay.setDate(nextDay.getDate() + 1);
+          }
+          return nextDay;
+        }
+        return currentCheckIn;
+      });
+    } catch (err) {
+      console.warn('Could not fetch completed bookings for listing:', err);
+    }
   }, [listing.id]);
+
+  useEffect(() => {
+    fetchListingBookings();
+  }, [fetchListingBookings]);
 
   // Calculate nights and total amount
   const calculateNights = (): number => {
@@ -320,6 +342,8 @@ export const BookNow: React.FC<BookNowProps> = ({
       if (onSuccessBooking) {
         onSuccessBooking(newBooking);
       }
+      // Refresh local intervals
+      fetchListingBookings();
     } catch (err: any) {
       console.error('Error recording booking after Paystack checkout:', err);
       // Still persist locally and show confirmation
@@ -328,6 +352,7 @@ export const BookNow: React.FC<BookNowProps> = ({
       if (onSuccessBooking) {
         onSuccessBooking(newBooking);
       }
+      fetchListingBookings();
     } finally {
       setIsProcessing(false);
     }
@@ -339,9 +364,10 @@ export const BookNow: React.FC<BookNowProps> = ({
     console.log('Paystack checkout popup closed by user.');
   };
 
-  // Trigger Paystack Checkout flow
-  const handleInitiateCheckout = () => {
+  // Trigger Paystack Checkout flow with Pre-Payment Double-Booking Guard
+  const handleInitiateCheckout = async () => {
     setErrorMessage(null);
+    setToastMessage(null);
 
     // Validate inputs
     if (!checkInDate || !checkOutDate) {
@@ -372,6 +398,34 @@ export const BookNow: React.FC<BookNowProps> = ({
     }
 
     setIsProcessing(true);
+
+    const formattedCheckIn = formatDateToYYYYMMDD(checkInDate);
+    const formattedCheckOut = formatDateToYYYYMMDD(checkOutDate);
+
+    // THE PRE-PAYMENT DOUBLE-BOOKING GUARD:
+    // In the checkout flow, right before triggering the Paystack modal, implement a strict Supabase check.
+    // Query the bookings table to see if any 'completed' bookings overlap with the user's selected
+    // check_in_date and check_out_date. If an overlap exists, abort the Paystack initialization and show a toast error:
+    // "Sorry, these dates were just booked by someone else."
+    try {
+      const { hasOverlap } = await checkBookingOverlap(
+        listing.id,
+        formattedCheckIn,
+        formattedCheckOut
+      );
+
+      if (hasOverlap) {
+        setIsProcessing(false);
+        const doubleBookingError = 'Sorry, these dates were just booked by someone else.';
+        showToast(doubleBookingError);
+        setErrorMessage(doubleBookingError);
+        // Refresh calendar date blocking immediately
+        await fetchListingBookings();
+        return;
+      }
+    } catch (guardErr) {
+      console.warn('Pre-payment overlap verification check:', guardErr);
+    }
 
     try {
       // Call Paystack inline initializer with callbacks
@@ -483,7 +537,31 @@ export const BookNow: React.FC<BookNowProps> = ({
   }
 
   return (
-    <div className={`bg-[#FBF6EC] rounded-3xl p-5 sm:p-7 border border-[#1B4332]/10 flex flex-col justify-between space-y-6 ${className}`}>
+    <div className={`bg-[#FBF6EC] rounded-3xl p-5 sm:p-7 border border-[#1B4332]/10 flex flex-col justify-between space-y-6 relative ${className}`}>
+      {/* Pre-Payment Guard Alert Toast */}
+      {toastMessage && (
+        <div
+          role="alert"
+          id="pre-payment-guard-toast"
+          className="p-3.5 rounded-2xl bg-red-600 text-white shadow-xl flex items-center justify-between gap-3 border border-red-500 animate-in fade-in slide-in-from-top-2 duration-300"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 shrink-0 text-white" />
+            <span className="text-xs sm:text-sm font-bold leading-snug">
+              {toastMessage}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="p-1 rounded-lg hover:bg-red-700 text-white/90 hover:text-white transition-colors cursor-pointer"
+            aria-label="Dismiss error message"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Header: Price per Day & Live Escrow Badge */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between border-b border-[#1B4332]/10 pb-3.5">
@@ -565,6 +643,27 @@ export const BookNow: React.FC<BookNowProps> = ({
               />
             </div>
           </div>
+        </div>
+
+        {/* Datepicker Availability Legend */}
+        <div className="flex items-center justify-between text-[11px] text-[#6B756F] px-1 bg-white/60 p-2 rounded-xl border border-[#1B4332]/10">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+            <span className="text-[#14231C] font-medium">Available</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-gray-400" />
+            <span className="line-through text-gray-500">Grayed out = Booked</span>
+          </div>
+          {bookedIntervals.length > 0 ? (
+            <span className="font-mono text-[#1B4332] font-bold text-[10px] bg-[#1B4332]/10 px-2 py-0.5 rounded-md">
+              {bookedIntervals.length} Period{bookedIntervals.length > 1 ? 's' : ''} Reserved
+            </span>
+          ) : (
+            <span className="text-emerald-700 font-medium text-[10px]">
+              Open Dates
+            </span>
+          )}
         </div>
 
         {/* Guests Count Selector */}
@@ -670,7 +769,7 @@ export const BookNow: React.FC<BookNowProps> = ({
 
           <div className="flex justify-between text-[#6B756F]">
             <span>Physical Inspection & Verification Fee</span>
-            <span className="font-semibold text-emerald-700">₦0 (Included by Ileya)</span>
+            <span className="font-semibold text-emerald-700">₦0 (Included by Ileya Afrika)</span>
           </div>
 
           <div className="border-t border-[#1B4332]/10 pt-2 flex justify-between items-baseline font-bold text-sm text-[#1B4332]">

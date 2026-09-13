@@ -111,7 +111,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <footer className="border-t border-[#1B4332]/10 bg-white/60 py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B756F]">
           <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-[#1B4332]">Ileya Operations Control</span>
+            <span className="font-serif font-bold text-[#1B4332]">Ileya Afrika Operations Control</span>
             <span>•</span>
             <span>Physical Quality Assurance & Settlement Security</span>
           </div>

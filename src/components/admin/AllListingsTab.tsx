@@ -22,14 +22,13 @@ import { NIGERIAN_STATES } from '../../data/nigerianData';
 
 interface AllListingsTabProps {
   listings: PropertyListing[];
-  onToggleBookingStatus: (id: string) => void;
+  onToggleBookingStatus?: (id: string) => void;
   onDeleteListing: (id: string) => void;
   onUpdateListingStatus: (id: string, status: ListingStatus) => void;
 }
 
 export const AllListingsTab: React.FC<AllListingsTabProps> = ({
   listings,
-  onToggleBookingStatus,
   onDeleteListing,
   onUpdateListingStatus,
 }) => {
@@ -215,8 +214,6 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredListings.map((listing) => {
-            const isBooked = !!listing.isBooked;
-
             return (
               <div
                 key={listing.id}
@@ -286,51 +283,23 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Booking Status Interactive Toggle Switch */}
+                    {/* Booking Availability Info */}
                     <div className="p-3 bg-[#FBF6EC] rounded-xl border border-[#1B4332]/10 flex items-center justify-between">
                       <div className="space-y-0.5">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B756F] block">
-                          Booking Status
+                          Availability Model
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isBooked ? 'bg-[#E8A33D]' : 'bg-[#2D6A4F]'
-                            }`}
-                          />
-                          <span
-                            className={`text-xs font-bold ${
-                              isBooked ? 'text-[#E8A33D]' : 'text-[#2D6A4F]'
-                            }`}
-                          >
-                            {isBooked ? 'Booked' : 'Available'}
+                          <span className="w-2 h-2 rounded-full bg-[#2D6A4F]" />
+                          <span className="text-xs font-bold text-[#2D6A4F]">
+                            Calendar-Managed
                           </span>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => onToggleBookingStatus(listing.id)}
-                        id={`toggle-booking-${listing.id}`}
-                        title={`Click to mark as ${isBooked ? 'Available' : 'Booked'}`}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          isBooked
-                            ? 'bg-[#E8A33D] text-[#14231C] hover:bg-[#d99530]'
-                            : 'bg-[#2D6A4F] text-white hover:bg-[#1B4332]'
-                        }`}
-                      >
-                        {isBooked ? (
-                          <>
-                            <ToggleRight className="w-4 h-4" />
-                            <span>Set Available</span>
-                          </>
-                        ) : (
-                          <>
-                            <ToggleLeft className="w-4 h-4" />
-                            <span>Set Booked</span>
-                          </>
-                        )}
-                      </button>
+                      <span className="text-[10px] font-bold text-[#1B4332] bg-white px-2.5 py-1 rounded-lg border border-[#1B4332]/10 shadow-2xs">
+                        Date-based
+                      </span>
                     </div>
 
                     {/* Host quick summary */}
@@ -398,7 +367,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
             </div>
 
             <p className="text-xs text-[#6B756F] leading-relaxed mb-5">
-              Are you sure you want to permanently delete <strong>{listingToDelete.title}</strong> from the Ileya platform? This action cannot be undone.
+              Are you sure you want to permanently delete <strong>{listingToDelete.title}</strong> from the Ileya Afrika platform? This action cannot be undone.
             </p>
 
             <div className="flex items-center justify-end gap-2.5">

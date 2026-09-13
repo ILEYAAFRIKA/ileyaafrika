@@ -28,7 +28,7 @@ export const BookingHistoryCard: React.FC<BookingHistoryCardProps> = ({
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
 
   const supportWhatsAppUrl = `https://wa.me/2348000000000?text=${encodeURIComponent(
-    `Hello Ileya Concierge, I need assistance regarding my reservation for "${booking.listingTitle}" (#ILE-${booking.id.slice(0, 6)}).`
+    `Hello Ileya Afrika Concierge, I need assistance regarding my reservation for "${booking.listingTitle}" (#ILE-${booking.id.slice(0, 6)}).`
   )}`;
 
   const photo =

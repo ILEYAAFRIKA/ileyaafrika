@@ -43,9 +43,9 @@ export const BookingConfirmationModal: React.FC<BookingConfirmationModalProps> =
   );
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
 
-  // 24/7 Ileya WhatsApp Support Link
+  // 24/7 Ileya Afrika WhatsApp Support Link
   const supportWhatsAppUrl = `https://wa.me/2348000000000?text=${encodeURIComponent(
-    `Hello Ileya Support, I just confirmed my booking for "${listing.title}" in ${listing.cityArea}, ${listing.state}. My reservation code is #ILE-${listing.id.slice(0, 6)}.`
+    `Hello Ileya Afrika Support, I just confirmed my booking for "${listing.title}" in ${listing.cityArea}, ${listing.state}. My reservation code is #ILE-${listing.id.slice(0, 6)}.`
   )}`;
 
   return (
@@ -132,7 +132,7 @@ export const BookingConfirmationModal: React.FC<BookingConfirmationModalProps> =
             </a>
           </div>
 
-          {/* 24/7 Ileya Concierge Support Notification & Quality Assurance */}
+          {/* 24/7 Ileya Afrika Concierge Support Notification & Quality Assurance */}
           <div>
             <a
               href={supportWhatsAppUrl}
@@ -146,7 +146,7 @@ export const BookingConfirmationModal: React.FC<BookingConfirmationModalProps> =
               </div>
               <div className="flex-1">
                 <span className="text-xs font-bold text-[#1B4332] block group-hover:text-[#2D6A4F]">
-                  24/7 Ileya Concierge & Arrival Support
+                  24/7 Ileya Afrika Concierge & Arrival Support
                 </span>
                 <span className="text-[11px] text-[#6B756F] block mt-0.5">
                   Direct WhatsApp concierge for arrival coordination, property directions, and key handoff assistance

@@ -61,7 +61,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           <div className="flex items-center gap-2">
             <div className="px-2.5 py-1 rounded-full bg-[#1B4332] text-[#E8A33D] text-xs font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Physically Verified by Ileya</span>
+              <span>Physically Verified by Ileya Afrika</span>
             </div>
             <span className="text-xs font-bold text-[#6B756F]">
               • {listing.propertyType}
@@ -141,7 +141,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 </div>
                 <p className="text-xs text-[#6B756F] leading-relaxed">
                   {listing.verificationNotes ||
-                    'Inspected by Ileya Quality Assurance Inspector. 24/7 power backup schedule, borehole treated water, high-speed WiFi, and gated security physical presence verified.'}
+                    'Inspected by Ileya Afrika Quality Assurance Inspector. 24/7 power backup schedule, borehole treated water, high-speed WiFi, and gated security physical presence verified.'}
                 </p>
               </div>
 

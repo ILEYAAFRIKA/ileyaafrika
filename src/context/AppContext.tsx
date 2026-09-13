@@ -373,7 +373,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       images: photoArray,
       status: newListing.status || 'pending',
       isPhysicallyVerified: newListing.isPhysicallyVerified ?? false,
-      isBooked: newListing.isBooked ?? false,
       createdAt: newListing.createdAt || new Date().toISOString().split('T')[0],
     };
 
@@ -412,7 +411,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const rejectListing = (id: string, reason: string) => {
     const updates: Partial<PropertyListing> = {
       status: 'rejected',
-      rejectionReason: reason || 'Does not meet minimum Ileya quality standards.'
+      rejectionReason: reason || 'Does not meet minimum Ileya Afrika quality standards.'
     };
 
     setListingsState((prev) =>
@@ -430,18 +429,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteListingFromSupabase(id);
   };
 
-  const toggleBookingStatus = (id: string) => {
-    const target = listings.find((l) => l.id === id);
-    if (!target) return;
-    const newBookedStatus = !target.isBooked;
-
-    setListingsState((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, isBooked: newBookedStatus } : item
-      )
-    );
-    updateListingInSupabase(id, { isBooked: newBookedStatus });
-  };
+  // Deprecated: is_booked is replaced by date-based bookings table availability
+  const toggleBookingStatus = (_id: string) => {};
 
   const updateListingStatus = (id: string, status: ListingStatus) => {
     const isApproved = status === 'approved_live' || status === 'approved';

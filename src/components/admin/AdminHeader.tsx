@@ -10,6 +10,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { AdminViewTab, UserSession } from '../../types';
+import { BrandLogo } from '../common/BrandLogo';
 
 interface AdminHeaderProps {
   activeTab: AdminViewTab;
@@ -43,19 +44,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-[#E8A33D] shadow-sm border border-[#E8A33D]/20 shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-xl font-bold font-serif text-white tracking-tight leading-none">
-                  Ileya
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E8A33D] text-[#14231C] leading-none shrink-0">
-                  {isMasterAdmin ? 'Master Admin' : 'Operations Admin'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[#FBF6EC]/70 hidden sm:block truncate mt-0.5">
-                Physical Verification & Property Oversight Center
-              </p>
-            </div>
+            <BrandLogo
+              variant="dark"
+              badge={isMasterAdmin ? 'Master Admin' : 'Operations Admin'}
+            />
           </div>
 
           {/* User Email & Logout Action */}

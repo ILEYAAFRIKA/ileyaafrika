@@ -41,7 +41,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
     } else if (!cleaned.startsWith('234') && cleaned.length === 10) {
       cleaned = '234' + cleaned;
     }
-    const message = encodeURIComponent('Hello, this is Ileya Verification Team');
+    const message = encodeURIComponent('Hello, this is Ileya Afrika Verification Team');
     return `https://wa.me/${cleaned}?text=${message}`;
   };
 
@@ -53,7 +53,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
   const handleConfirmReject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingListingId) return;
-    const reason = rejectionReasonInput.trim() || 'Property did not meet Ileya physical verification standards.';
+    const reason = rejectionReasonInput.trim() || 'Property did not meet Ileya Afrika physical verification standards.';
     onRejectListing(rejectingListingId, reason);
     setRejectingListingId(null);
     setRejectionReasonInput('');
@@ -72,7 +72,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
               </h2>
             </div>
             <p className="text-xs text-[#6B756F] mt-1 max-w-2xl leading-relaxed">
-              Every short-let apartment listed on Ileya must undergo physical on-ground inspection by our operations team in Lagos, Abuja, Port Harcourt, or Ibadan before it goes live to guests.
+              Every short-let apartment listed on Ileya Afrika must undergo physical on-ground inspection by our operations team in Lagos, Abuja, Port Harcourt, or Ibadan before it goes live to guests.
             </p>
           </div>
 

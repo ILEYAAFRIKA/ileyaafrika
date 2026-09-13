@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { UserSession, GuestViewTab } from '../../types';
+import { BrandLogo } from '../common/BrandLogo';
 
 interface GuestHeaderProps {
   activeTab: GuestViewTab;
@@ -42,19 +43,11 @@ export const GuestHeader: React.FC<GuestHeaderProps> = ({
           <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-md shadow-[#1B4332]/20 shrink-0">
             <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-xl font-bold font-serif tracking-tight text-[#1B4332] leading-none">
-                Ileya
-              </span>
-              <span className="text-[10px] font-extrabold uppercase px-1.5 sm:px-2 py-0.5 rounded-full bg-[#E8A33D]/20 text-[#14231C] border border-[#E8A33D]/40 leading-none shrink-0">
-                Guest Portal
-              </span>
-            </div>
-            <p className="text-[11px] text-[#6B756F] hidden sm:block truncate mt-0.5">
-              Physically Verified Nigerian Short-Lets & Serviced Apartments
-            </p>
-          </div>
+          <BrandLogo
+            variant="light"
+            badge="Guest Portal"
+            onClick={() => onSelectTab('explore')}
+          />
         </div>
 
         {/* Center Tabbed Navigation: Explore vs My Bookings (Desktop) */}
@@ -120,7 +113,7 @@ export const GuestHeader: React.FC<GuestHeaderProps> = ({
             onClick={onLogout}
             id="guest-logout-btn"
             className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer shadow-xs shrink-0"
-            title={session?.isAuthenticated ? 'Sign Out of Ileya' : 'Sign In to Ileya'}
+            title={session?.isAuthenticated ? 'Sign Out of Ileya Afrika' : 'Sign In to Ileya Afrika'}
           >
             {session?.isAuthenticated ? (
               <>

@@ -24,8 +24,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 }) => {
   if (!listing) return null;
 
-  const isAvailable = !listing.isBooked;
-
   const mainPhoto =
     (listing.photos && listing.photos.length > 0 && listing.photos[0]) ||
     (listing.images && listing.images.length > 0 && listing.images[0]) ||
@@ -55,24 +53,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         {/* Physical Verification Badge */}
         <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#1B4332]/95 backdrop-blur-xs text-[#E8A33D] text-[11px] font-bold flex items-center gap-1.5 shadow-md border border-[#E8A33D]/30">
           <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D]" />
-          <span>Physically Verified by Ileya</span>
+          <span>Physically Verified by Ileya Afrika</span>
         </div>
 
-        {/* Live Availability Badge */}
+        {/* Live Booking Badge */}
         <div className="absolute top-3 right-3">
-          <span
-            className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 backdrop-blur-xs ${
-              isAvailable
-                ? 'bg-emerald-500/90 text-white border border-emerald-400/40'
-                : 'bg-amber-500/90 text-white border border-amber-400/40'
-            }`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                isAvailable ? 'bg-white animate-pulse' : 'bg-white'
-              }`}
-            />
-            <span>{isAvailable ? 'Available Now' : 'Currently Booked'}</span>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 backdrop-blur-xs bg-emerald-600/95 text-white border border-emerald-400/40">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span>Book by Date</span>
           </span>
         </div>
 

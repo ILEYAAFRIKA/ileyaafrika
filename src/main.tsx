@@ -6,7 +6,7 @@ import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary fallbackTitle="Ileya Application Error">
+    <ErrorBoundary fallbackTitle="Ileya Afrika Application Error">
       <App />
     </ErrorBoundary>
   </StrictMode>,

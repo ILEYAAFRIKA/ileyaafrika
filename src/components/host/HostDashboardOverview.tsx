@@ -776,7 +776,7 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
             </div>
 
             <p className="text-xs text-[#6B756F] leading-relaxed mb-5">
-              Are you sure you want to permanently delete this listing from your host portfolio and remove it from the Ileya platform?
+              Are you sure you want to permanently delete this listing from your host portfolio and remove it from the Ileya Afrika platform?
             </p>
 
             <div className="flex items-center justify-end gap-2.5">
@@ -918,7 +918,7 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
                 </p>
                 <p className="font-mono text-sm font-semibold text-[#14231C]">{selectedListing.hostWhatsApp}</p>
                 <p className="text-[11px] text-[#6B756F] mt-1">
-                  Strictly private. Used by Ileya on-ground inspectors to confirm keys and verify generators/inverters before activation.
+                  Strictly private. Used by Ileya Afrika on-ground inspectors to confirm keys and verify generators/inverters before activation.
                 </p>
               </div>
 

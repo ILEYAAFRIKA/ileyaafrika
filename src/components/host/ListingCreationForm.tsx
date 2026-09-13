@@ -283,7 +283,6 @@ export const ListingCreationForm: React.FC<ListingCreationFormProps> = ({
         hostBankDetails: bankDetails || INITIAL_BANK_SETTINGS,
         status: 'pending',
         isPhysicallyVerified: false,
-        isBooked: false,
         createdAt: new Date().toISOString().split('T')[0],
         verificationNotes: 'Pending WhatsApp contact and physical inspection scheduling.'
       };
@@ -350,7 +349,7 @@ export const ListingCreationForm: React.FC<ListingCreationFormProps> = ({
             Add New Property Listing
           </h2>
           <p className="mt-1.5 text-sm text-[#6B756F]">
-            Provide accurate details for your apartment. All submissions will be physically inspected in person by an Ileya verification officer before being published to travelers.
+            Provide accurate details for your apartment. All submissions will be physically inspected in person by an Ileya Afrika verification officer before being published to travelers.
           </p>
         </div>
 
@@ -683,7 +682,7 @@ export const ListingCreationForm: React.FC<ListingCreationFormProps> = ({
               <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                 <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <p className="text-xs leading-relaxed font-medium">
-                  <strong>Privacy Guarantee:</strong> This number is strictly private and used only by the Ileya team to schedule physical inspection. It will never be shown to guests.
+                  <strong>Privacy Guarantee:</strong> This number is strictly private and used only by the Ileya Afrika team to schedule physical inspection. It will never be shown to guests.
                 </p>
               </div>
             </div>

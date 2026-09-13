@@ -179,7 +179,7 @@ function MainApp() {
         <div className="w-14 h-14 rounded-2xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-lg mb-4">
           <Loader2 className="w-7 h-7 animate-spin text-[#E8A33D]" />
         </div>
-        <h2 className="text-xl font-bold font-serif text-[#1B4332]">Ileya Verified Stays</h2>
+        <h2 className="text-xl font-bold font-serif text-[#1B4332]">Ileya Afrika Verified Stays</h2>
         <p className="text-xs text-[#6B756F] mt-1.5 flex items-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
           <span>Synchronizing verified session...</span>
@@ -312,7 +312,7 @@ function MainApp() {
         <footer className="border-t border-[#1B4332]/10 bg-white/60 py-6 mt-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B756F]">
             <div className="flex items-center gap-2">
-              <span className="font-serif font-bold text-[#1B4332]">Ileya Host Portal</span>
+              <span className="font-serif font-bold text-[#1B4332]">Ileya Afrika Host Portal</span>
               <span>•</span>
               <span>Physical Inspection Operations: Lagos • Abuja • Port Harcourt • Ibadan</span>
             </div>

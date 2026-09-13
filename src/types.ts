@@ -72,7 +72,6 @@ export interface PropertyListing {
   hostBankDetails?: BankPayoutDetails;
   status: ListingStatus;
   isPhysicallyVerified?: boolean;
-  isBooked?: boolean;
   createdAt: string;
   verificationNotes?: string;
   rejectionReason?: string;

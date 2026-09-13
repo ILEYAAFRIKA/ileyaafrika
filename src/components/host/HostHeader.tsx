@@ -10,6 +10,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { HostViewTab, UserSession } from '../../types';
+import { BrandLogo } from '../common/BrandLogo';
 
 interface HostHeaderProps {
   activeTab: HostViewTab;
@@ -30,27 +31,16 @@ export const HostHeader: React.FC<HostHeaderProps> = ({
         <div className="flex items-center justify-between h-16 sm:h-18 gap-2 sm:gap-4">
           {/* Logo and Partner Badge */}
           <div className="flex items-center gap-2 sm:gap-6 min-w-0 shrink-0">
-            <button
-              onClick={() => onSelectTab('listings')}
-              className="flex items-center gap-2 sm:gap-3 text-left group cursor-pointer focus:outline-none min-w-0"
-            >
+            <div className="flex items-center gap-2 sm:gap-3 text-left group min-w-0">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-sm group-hover:scale-105 transition-transform shrink-0">
                 <Building2 className="w-5 h-5" />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#1B4332] font-serif leading-none">
-                    Ileya
-                  </span>
-                  <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#E8A33D]/20 text-[#1B4332] border border-[#E8A33D]/30 leading-none shrink-0">
-                    Host Partner
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#6B756F] hidden sm:block truncate mt-0.5">
-                  Verified Short-Let Management
-                </p>
-              </div>
-            </button>
+              <BrandLogo
+                variant="light"
+                badge="Host Partner"
+                onClick={() => onSelectTab('listings')}
+              />
+            </div>
 
             {/* Navigation Tabs (Desktop) */}
             <nav className="hidden md:flex items-center gap-1 ml-4 border-l border-[#1B4332]/10 pl-5 shrink-0">

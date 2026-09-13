@@ -440,7 +440,6 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'babatunde.balogun@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-10T08:00:00.000Z',
     verificationNotes: 'Physical site audit verified 100KVA standby Cummins generator, Mikano synchronization panel, clean borehole with industrial reverse osmosis, and biometric access.'
   },
@@ -463,9 +462,8 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'amina.bello@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-12T10:30:00.000Z',
-    verificationNotes: 'Physically inspected by Ileya Abuja team. Dual 60KVA Perkins generators tested with 0-second transfer switch.'
+    verificationNotes: 'Physically inspected by Ileya Afrika Abuja team. Dual 60KVA Perkins generators tested with 0-second transfer switch.'
   },
   {
     id: 'LIST-LAG-003',
@@ -486,7 +484,6 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'chinedu.okonkwo@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-15T14:15:00.000Z',
     verificationNotes: 'Generator and inverter tested. Continuous pressure running water verified.'
   },
@@ -509,7 +506,6 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'folake.adeyemi@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-18T11:00:00.000Z',
     verificationNotes: 'Inverter batteries health 98%. Clean borehole and water treatment plant confirmed.'
   },
@@ -532,7 +528,6 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'tamuno.briggs@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-20T16:00:00.000Z',
     verificationNotes: 'Physical inspection completed. All air conditioners serviced, generator fuel levels tracked.'
   },
@@ -555,7 +550,6 @@ export const INITIAL_VERIFIED_LISTINGS: PropertyListing[] = [
     hostEmail: 'olumide.adeleke@ileya.ng',
     status: 'approved_live',
     isPhysicallyVerified: true,
-    isBooked: false,
     createdAt: '2025-01-22T09:45:00.000Z',
     verificationNotes: 'Solar inverter system rated 5kVA with lithium iron phosphate storage. 24/7 uptime verified.'
   }

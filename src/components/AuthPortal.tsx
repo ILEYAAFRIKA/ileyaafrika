@@ -19,6 +19,7 @@ import {
 import { UserRole, AuthMode } from '../types';
 import { useApp, MASTER_ADMIN_EMAIL } from '../context/AppContext';
 import { saveUserDocToSupabase, getUserFromSupabase } from '../lib/supabaseService';
+import { BrandLogo } from './common/BrandLogo';
 
 interface AuthPortalProps {
   onSuccess: (data: { role: UserRole; fullName: string; email: string }) => void;
@@ -266,14 +267,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           <div className="w-10 h-10 rounded-xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-sm shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
-            <span className="text-2xl font-extrabold tracking-tight text-[#1B4332] font-serif">
-              Ileya
-            </span>
-            <span className="hidden sm:inline-block ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1B4332]/10 text-[#1B4332]">
-              Verified Stays
-            </span>
-          </div>
+          <BrandLogo variant="light" badge="Verified Stays" />
         </div>
 
         <div className="flex items-center gap-1.5 text-xs font-medium text-[#6B756F] shrink-0">
@@ -300,7 +294,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 <span>Physical Verification Guaranteed</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-[#1B4332] font-serif tracking-tight">
-                {mode === 'reset-password' ? 'Reset Password' : 'Welcome to Ileya'}
+                {mode === 'reset-password' ? 'Reset Password' : 'Welcome to Ileya Afrika'}
               </h1>
               <p className="mt-1.5 text-sm text-[#6B756F]">
                 {mode === 'reset-password'
@@ -637,7 +631,7 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
       <footer className="w-full max-w-md mx-auto text-center">
         <div className="flex items-center justify-center gap-2 text-xs text-[#6B756F]">
           <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
-          <span>Ileya physically inspects and verifies every listing in Nigeria</span>
+          <span>Ileya Afrika physically inspects and verifies every listing in Nigeria</span>
         </div>
       </footer>
     </div>
