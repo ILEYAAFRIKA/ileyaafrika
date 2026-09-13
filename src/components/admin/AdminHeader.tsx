@@ -35,35 +35,35 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   onLogout,
 }) => {
   return (
-    <header className="sticky top-0 z-30 bg-[#1B4332] text-white border-b border-[#2D6A4F] shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20">
+    <header className="sticky top-0 z-30 bg-[#1B4332] text-white border-b border-[#2D6A4F] shadow-md w-full max-w-full overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           {/* Logo & Portal Identity */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-[#E8A33D] shadow-sm border border-[#E8A33D]/20">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-[#E8A33D] shadow-sm border border-[#E8A33D]/20 shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold font-serif text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-xl font-bold font-serif text-white tracking-tight leading-none">
                   Ileya
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E8A33D] text-[#14231C]">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#E8A33D] text-[#14231C] leading-none shrink-0">
                   {isMasterAdmin ? 'Master Admin' : 'Operations Admin'}
                 </span>
               </div>
-              <p className="text-[11px] text-[#FBF6EC]/70 hidden sm:block">
+              <p className="text-[11px] text-[#FBF6EC]/70 hidden sm:block truncate mt-0.5">
                 Physical Verification & Property Oversight Center
               </p>
             </div>
           </div>
 
           {/* User Email & Logout Action */}
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="text-right hidden md:block">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div className="text-right hidden md:block min-w-0">
               <div className="text-xs font-semibold text-white flex items-center justify-end gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D]" />
-                <span className="truncate max-w-[200px]">{session?.email || 'emmanuelolarinde53@gmail.com'}</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D] shrink-0" />
+                <span className="truncate max-w-48">{session?.email || 'emmanuelolarinde53@gmail.com'}</span>
               </div>
               <span className="text-[11px] text-[#FBF6EC]/70">
                 {isMasterAdmin ? 'Full Authorization' : 'Operations Staff'}
@@ -73,16 +73,16 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             <button
               onClick={onLogout}
               id="admin-signout-btn"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 sm:px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all cursor-pointer shrink-0"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar border-t border-[#2D6A4F]/60 pt-2 pb-2">
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar border-t border-[#2D6A4F]/60 pt-2 pb-2 w-full max-w-full">
           {/* Tab 1: Pending Verifications */}
           <button
             type="button"

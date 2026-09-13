@@ -261,12 +261,12 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
   return (
     <div className="min-h-screen w-full flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 bg-[#FBF6EC] text-[#14231C]">
       {/* Top Brand Bar */}
-      <header className="w-full max-w-5xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-sm">
+      <header className="w-full max-w-5xl mx-auto flex items-center justify-between gap-2 overflow-x-hidden">
+        <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-sm shrink-0">
             <Building2 className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="text-2xl font-extrabold tracking-tight text-[#1B4332] font-serif">
               Ileya
             </span>
@@ -276,9 +276,10 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs font-medium text-[#6B756F]">
-          <MapPin className="w-3.5 h-3.5 text-[#2D6A4F]" />
-          <span>Nigeria (Lagos • Abuja • Port Harcourt • Ibadan)</span>
+        <div className="flex items-center gap-1.5 text-xs font-medium text-[#6B756F] shrink-0">
+          <MapPin className="w-3.5 h-3.5 text-[#2D6A4F] shrink-0" />
+          <span className="hidden sm:inline">Nigeria (Lagos • Abuja • Port Harcourt • Ibadan)</span>
+          <span className="sm:hidden">Nigeria</span>
         </div>
       </header>
 

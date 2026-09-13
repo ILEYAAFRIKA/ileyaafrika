@@ -845,16 +845,3 @@ export function subscribeToAdminEmails(onUpdate: (emails: string[]) => void): ()
     }
   };
 }
-
-// Aliases for compatibility
-export const getUserFromFirestore = getUserFromSupabase;
-export const getUserByEmailFromFirestore = getUserByEmailFromSupabase;
-export const saveUserDocToFirestore = saveUserDocToSupabase;
-export const syncUserToFirestore = syncUserToSupabase;
-export const saveListingToFirestore = saveListingToSupabase;
-export const updateListingInFirestore = updateListingInSupabase;
-export const deleteListingFromFirestore = deleteListingFromSupabase;
-export const saveBookingToFirestore = saveBookingToSupabase;
-export const saveAdminEmailToFirestore = saveAdminEmailToSupabase;
-export const deleteAdminEmailFromFirestore = deleteAdminEmailFromSupabase;
-export const savePayoutDetailsToFirestore = savePayoutDetailsToSupabase;
