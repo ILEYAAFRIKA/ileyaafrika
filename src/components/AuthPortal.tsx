@@ -632,15 +632,20 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
                 </p>
               </div>
             )}
-            {/* Direct Guest Explore Link */}
+            {/* Direct Guest Signup Prompt */}
             <div className="mt-4 pt-4 border-t border-[#1B4332]/10 text-center">
               <button
                 type="button"
-                onClick={() => onNavigate?.('/guest-dashboard')}
+                onClick={() => {
+                  setRole('guest');
+                  setMode('signup');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
                 id="btn-explore-guest-direct"
                 className="text-xs font-bold text-[#1B4332] hover:text-[#2D6A4F] hover:underline flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
               >
-                <span>Just browsing? Explore Verified Stays as Guest</span>
+                <span>New guest? Create an account to explore verified stays</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>

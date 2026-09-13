@@ -27,15 +27,25 @@ import { supabase } from '../lib/supabase';
 import { generateUUID } from '../lib/uuid';
 
 export interface SupabaseDiagnosticRoutineProps {
+  isOpen?: boolean;
+  onClose?: () => void;
   autoRunOnMount?: boolean;
   defaultOpen?: boolean;
+  showFloatingTrigger?: boolean;
+  triggerRunTimestamp?: number;
 }
 
 export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps> = ({
-  autoRunOnMount = true,
+  isOpen,
+  onClose,
+  autoRunOnMount = false,
   defaultOpen = false,
+  showFloatingTrigger = false,
+  triggerRunTimestamp,
 }) => {
-  const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
+  const [internalIsOpen, setInternalIsOpen] = useState<boolean>(defaultOpen);
+  const isModalOpen = isOpen !== undefined ? isOpen : internalIsOpen;
+
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [report, setReport] = useState<DiagnosticReport | null>(null);
@@ -46,6 +56,13 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
     result: string | null;
     success?: boolean;
   }>({ running: false, result: null });
+
+  const handleClose = useCallback(() => {
+    setInternalIsOpen(false);
+    if (onClose) {
+      onClose();
+    }
+  }, [onClose]);
 
   // Execute diagnostics
   const executeDiagnostics = useCallback(async () => {
@@ -60,12 +77,26 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
     }
   }, []);
 
-  // Run on mount if requested
+  // Run on mount only if explicitly requested
   useEffect(() => {
     if (autoRunOnMount) {
       executeDiagnostics();
     }
   }, [autoRunOnMount, executeDiagnostics]);
+
+  // Trigger when admin manually clicks "Run System Diagnostics" button
+  useEffect(() => {
+    if (triggerRunTimestamp && triggerRunTimestamp > 0) {
+      executeDiagnostics();
+    }
+  }, [triggerRunTimestamp, executeDiagnostics]);
+
+  // Auto-run if opened and no report has been generated yet
+  useEffect(() => {
+    if (isModalOpen && !report && !isRunning) {
+      executeDiagnostics();
+    }
+  }, [isModalOpen, report, isRunning, executeDiagnostics]);
 
   // Copy report to clipboard
   const handleCopyReport = () => {
@@ -187,56 +218,65 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
 
   return (
     <>
-      {/* Floating Trigger Badge */}
-      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2">
-        <button
-          id="supabase-diagnostic-trigger"
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="group flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#1B4332] text-white shadow-xl hover:bg-[#143427] border border-[#E8A33D]/40 transition-all cursor-pointer text-xs font-semibold"
-          title="Open Supabase & Booking Diagnostic Routine"
-        >
-          <span className="relative flex h-2.5 w-2.5">
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                report?.overallStatus === 'HEALTHY'
-                  ? 'bg-emerald-400'
-                  : report?.overallStatus === 'CRITICAL'
-                  ? 'bg-rose-400'
-                  : 'bg-amber-400'
-              }`}
-            />
-            <span
-              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                report?.overallStatus === 'HEALTHY'
-                  ? 'bg-emerald-500'
-                  : report?.overallStatus === 'CRITICAL'
-                  ? 'bg-rose-500'
-                  : 'bg-amber-500'
-              }`}
-            />
-          </span>
-          <Database className="w-3.5 h-3.5 text-[#E8A33D]" />
-          <span>Supabase Diagnostics</span>
-          {report && (
-            <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${
-                report.overallStatus === 'HEALTHY'
-                  ? 'bg-emerald-800 text-emerald-200'
-                  : report.overallStatus === 'CRITICAL'
-                  ? 'bg-rose-900 text-rose-200'
-                  : 'bg-amber-800 text-amber-200'
-              }`}
-            >
-              {report.overallStatus}
+      {/* Floating Trigger Badge (Hidden by default, only shown if explicitly enabled) */}
+      {showFloatingTrigger && (
+        <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2">
+          <button
+            id="supabase-diagnostic-trigger"
+            type="button"
+            onClick={() => setInternalIsOpen(!isModalOpen)}
+            className="group flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#1B4332] text-white shadow-xl hover:bg-[#143427] border border-[#E8A33D]/40 transition-all cursor-pointer text-xs font-semibold"
+            title="Open Supabase & Booking Diagnostic Routine"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  report?.overallStatus === 'HEALTHY'
+                    ? 'bg-emerald-400'
+                    : report?.overallStatus === 'CRITICAL'
+                    ? 'bg-rose-400'
+                    : 'bg-amber-400'
+                }`}
+              />
+              <span
+                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                  report?.overallStatus === 'HEALTHY'
+                    ? 'bg-emerald-500'
+                    : report?.overallStatus === 'CRITICAL'
+                    ? 'bg-rose-500'
+                    : 'bg-amber-500'
+                }`}
+              />
             </span>
-          )}
-        </button>
-      </div>
+            <Database className="w-3.5 h-3.5 text-[#E8A33D]" />
+            <span>Supabase Diagnostics</span>
+            {report && (
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${
+                  report.overallStatus === 'HEALTHY'
+                    ? 'bg-emerald-800 text-emerald-200'
+                    : report.overallStatus === 'CRITICAL'
+                    ? 'bg-rose-900 text-rose-200'
+                    : 'bg-amber-800 text-amber-200'
+                }`}
+              >
+                {report.overallStatus}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Main Diagnostic Modal / Panel */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleClose();
+            }
+          }}
+        >
           <div
             className={`bg-white rounded-3xl shadow-2xl border border-[#1B4332]/20 flex flex-col overflow-hidden transition-all duration-200 ${
               isExpanded
@@ -308,7 +348,7 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
 
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="p-2 rounded-xl bg-white/10 hover:bg-rose-500/30 text-white text-xs transition-colors cursor-pointer"
                   title="Close Diagnostic Window"
                 >
@@ -833,7 +873,7 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleClose}
                   className="text-neutral-700 hover:text-neutral-900 font-semibold cursor-pointer"
                 >
                   Close Panel

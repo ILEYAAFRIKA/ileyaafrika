@@ -7,7 +7,8 @@ import {
   Users,
   LogOut,
   Sparkles,
-  CreditCard
+  CreditCard,
+  Activity
 } from 'lucide-react';
 import { AdminViewTab, UserSession } from '../../types';
 import { BrandLogo } from '../common/BrandLogo';
@@ -22,6 +23,7 @@ interface AdminHeaderProps {
   bookingsCount?: number;
   isMasterAdmin: boolean;
   onLogout: () => void;
+  onRunDiagnostics?: () => void;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
@@ -34,6 +36,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   bookingsCount = 0,
   isMasterAdmin,
   onLogout,
+  onRunDiagnostics,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-[#1B4332] text-white border-b border-[#2D6A4F] shadow-md w-full max-w-full overflow-x-hidden">
@@ -61,6 +64,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 {isMasterAdmin ? 'Full Authorization' : 'Operations Staff'}
               </span>
             </div>
+
+            {isMasterAdmin && onRunDiagnostics && (
+              <button
+                type="button"
+                onClick={onRunDiagnostics}
+                id="admin-header-diagnostics-btn"
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold px-3 sm:px-3.5 py-2 rounded-xl bg-[#E8A33D] hover:bg-[#d99432] text-[#14231C] shadow-sm transition-all cursor-pointer shrink-0"
+                title="Open and Run Supabase System Diagnostics"
+              >
+                <Activity className="w-3.5 h-3.5 shrink-0" />
+                <span>Run System Diagnostics</span>
+              </button>
+            )}
 
             <button
               onClick={onLogout}

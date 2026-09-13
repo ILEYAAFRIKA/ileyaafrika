@@ -35,7 +35,7 @@ export class ErrorBoundary extends (React.Component as any) {
 
   handleGoHome = () => {
     this.setState({ hasError: false, error: null });
-    window.location.href = '/guest-dashboard';
+    window.location.href = '/';
   };
 
   render() {

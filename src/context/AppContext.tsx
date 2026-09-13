@@ -42,6 +42,7 @@ export const MASTER_ADMIN_EMAIL = 'emmanuelolarinde53@gmail.com';
 interface AppContextType {
   currentUser: UserSession | null;
   setCurrentUser: (user: UserSession | null) => void;
+  isLoading: boolean;
   authLoading: boolean;
   isAuthLoading: boolean;
   users: RegisteredUser[];
@@ -167,11 +168,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (session?.user) {
           await handleUserSession(session.user);
         } else {
+          setCurrentUserState(null);
+          setStoredItem(STORAGE_KEYS.CURRENT_USER, null);
           setAuthLoading(false);
         }
       })
       .catch((err) => {
         console.warn('Supabase auth session check notice:', err);
+        setCurrentUserState(null);
+        setStoredItem(STORAGE_KEYS.CURRENT_USER, null);
         setAuthLoading(false);
       });
 
@@ -509,6 +514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentUser,
         setCurrentUser,
+        isLoading: authLoading,
         authLoading,
         isAuthLoading: authLoading,
         users,
@@ -547,3 +553,18 @@ export const useApp = (): AppContextType => {
   }
   return context;
 };
+
+// Aliases for authentication context consumers
+export const useAuth = () => {
+  const app = useApp();
+  return {
+    ...app,
+    user: app.currentUser,
+    session: app.currentUser,
+    isAuthenticated: !!app.currentUser?.isAuthenticated,
+    isLoading: app.isLoading,
+  };
+};
+
+export const AuthContext = AppContext;
+export const AuthProvider = AppProvider;

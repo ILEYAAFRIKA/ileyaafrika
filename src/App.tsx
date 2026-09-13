@@ -7,7 +7,6 @@ import { ListingCreationForm } from './components/host/ListingCreationForm';
 import { HostPayoutSettings } from './components/host/HostPayoutSettings';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { GuestDashboard } from './components/guest/GuestDashboard';
-import { SupabaseDiagnosticRoutine } from './components/SupabaseDiagnosticRoutine';
 import {
   UserRole,
   UserSession,
@@ -22,10 +21,27 @@ import {
   Loader2,
 } from 'lucide-react';
 
+function normalizeRoute(path: string): string {
+  if (!path || path === '/' || path === '') return '/login';
+  if (path === '/login' || path === '/auth') return '/login';
+  if (path === '/guest' || path === '/guest-dashboard') return '/guest-dashboard';
+  if (path === '/host' || path === '/host-dashboard') return '/host-dashboard';
+  if (path === '/admin' || path === '/admin-dashboard') return '/admin-dashboard';
+  if (path.startsWith('/host/')) return path;
+  return path;
+}
+
+function getDashboardForRole(role?: UserRole): string {
+  if (role === 'master_admin' || role === 'admin') return '/admin-dashboard';
+  if (role === 'host') return '/host-dashboard';
+  return '/guest-dashboard';
+}
+
 function MainApp() {
   const {
     currentUser,
     setCurrentUser,
+    isLoading,
     authLoading,
     isAuthLoading,
     listings,
@@ -43,21 +59,11 @@ function MainApp() {
     logoutUser,
   } = useApp();
 
-  const loading = authLoading !== undefined ? authLoading : isAuthLoading;
+  const loading = isLoading !== undefined ? isLoading : (authLoading !== undefined ? authLoading : isAuthLoading);
 
-  // Sync router with browser history & pathname
+  // Sync router with browser history & pathname (Defaults strictly to /login when unauthenticated)
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
-    const path = window.location.pathname;
-    if (
-      path === '/guest-dashboard' ||
-      path === '/host-dashboard' ||
-      path === '/admin-dashboard' ||
-      path === '/host/new-listing' ||
-      path === '/host/payout-settings'
-    ) {
-      return path;
-    }
-    return '/guest-dashboard';
+    return normalizeRoute(window.location.pathname);
   });
 
   const [hostActiveTab, setHostActiveTab] = useState<HostViewTab>(() => {
@@ -68,13 +74,14 @@ function MainApp() {
   });
 
   const navigateTo = (path: string) => {
-    setCurrentRoute(path);
-    if (path === '/host/new-listing') setHostActiveTab('new-listing');
-    else if (path === '/host/payout-settings') setHostActiveTab('payout-settings');
-    else if (path === '/host-dashboard') setHostActiveTab('listings');
+    const normalized = normalizeRoute(path);
+    setCurrentRoute(normalized);
+    if (normalized === '/host/new-listing') setHostActiveTab('new-listing');
+    else if (normalized === '/host/payout-settings') setHostActiveTab('payout-settings');
+    else if (normalized === '/host-dashboard') setHostActiveTab('listings');
 
     try {
-      window.history.pushState({}, '', path);
+      window.history.pushState({}, '', normalized);
     } catch {
       // Fallback for sandboxed iframe environments
     }
@@ -82,28 +89,59 @@ function MainApp() {
 
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      setCurrentRoute(path);
-      if (path === '/host/new-listing') setHostActiveTab('new-listing');
-      else if (path === '/host/payout-settings') setHostActiveTab('payout-settings');
-      else if (path === '/host-dashboard') setHostActiveTab('listings');
+      const normalized = normalizeRoute(window.location.pathname);
+      setCurrentRoute(normalized);
+      if (normalized === '/host/new-listing') setHostActiveTab('new-listing');
+      else if (normalized === '/host/payout-settings') setHostActiveTab('payout-settings');
+      else if (normalized === '/host-dashboard') setHostActiveTab('listings');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Update route on session changes
+  const isAuthenticated = !!(currentUser && currentUser.isAuthenticated);
+
+  // 1. Strict Authentication Guard & 2. Role-Based Redirection Effect
   useEffect(() => {
-    if (!loading && currentUser?.isAuthenticated) {
-      if (currentUser?.role === 'master_admin' || currentUser?.role === 'admin') {
-        if (currentRoute === '/auth') setCurrentRoute('/admin-dashboard');
-      } else if (currentUser?.role === 'host') {
-        if (currentRoute === '/auth') setCurrentRoute('/host-dashboard');
-      } else if (currentUser?.role === 'guest') {
-        if (currentRoute === '/auth') setCurrentRoute('/guest-dashboard');
+    if (loading) return;
+
+    if (!isAuthenticated) {
+      // 1. Strict Authentication Guard:
+      // If no active session exists, user MUST be redirected to /login.
+      // Unauthenticated users should never see the Guest or Host dashboards.
+      if (currentRoute !== '/login') {
+        setCurrentRoute('/login');
+        try {
+          window.history.replaceState({}, '', '/login');
+        } catch {
+          // Fallback for sandboxed iframe environments
+        }
+      }
+    } else {
+      // 2. Role-Based Redirection:
+      // If user is already logged in, evaluate their account type/role.
+      // Automatically redirect to their respective dashboard so they don't have to log in again.
+      const targetDashboard = getDashboardForRole(currentUser?.role);
+
+      if (currentRoute === '/login' || currentRoute === '/auth' || currentRoute === '/') {
+        navigateTo(targetDashboard);
+      } else {
+        // Enforce role-based access boundaries
+        const role = currentUser?.role;
+        const isGuest = role === 'guest';
+        const isHost = role === 'host';
+        const isAdmin = role === 'admin' || role === 'master_admin';
+
+        if (isGuest && (currentRoute.startsWith('/host') || currentRoute.startsWith('/admin'))) {
+          navigateTo('/guest-dashboard');
+        } else if (isHost && (currentRoute.startsWith('/guest') || currentRoute.startsWith('/admin'))) {
+          navigateTo('/host-dashboard');
+        } else if (isAdmin && (currentRoute.startsWith('/guest') || currentRoute.startsWith('/host'))) {
+          navigateTo('/admin-dashboard');
+        }
       }
     }
-  }, [currentUser, loading, currentRoute]);
+  }, [loading, isAuthenticated, currentUser?.role, currentRoute]);
 
   // Handle successful login/signup from AuthPortal
   const handleAuthSuccess = (data: { role?: UserRole; fullName: string; email: string }) => {
@@ -118,19 +156,16 @@ function MainApp() {
     };
     setCurrentUser(userSession);
 
-    if (userRole === 'master_admin' || userRole === 'admin') {
-      navigateTo('/admin-dashboard');
-    } else if (userRole === 'guest') {
-      navigateTo('/guest-dashboard');
-    } else {
+    const targetDashboard = getDashboardForRole(userRole);
+    if (userRole === 'host') {
       setHostActiveTab('listings');
-      navigateTo('/host-dashboard');
     }
+    navigateTo(targetDashboard);
   };
 
   const handleLogout = async () => {
     await logoutUser();
-    navigateTo('/auth');
+    navigateTo('/login');
   };
 
   // Filter listings for current host
@@ -163,7 +198,7 @@ function MainApp() {
   // Host deletes entire account (Danger Zone)
   const handleDeleteAccount = async () => {
     await logoutUser();
-    navigateTo('/auth');
+    navigateTo('/login');
   };
 
   // Host updates bank details
@@ -172,7 +207,7 @@ function MainApp() {
   };
 
   // -------------------------------------------------------------
-  // Dedicated Loading Barrier (Ensures role is fetched before render)
+  // 3. Loading Barrier (Prevents Route Flashing on Initial Auth Check)
   // -------------------------------------------------------------
   if (loading) {
     return (
@@ -183,26 +218,22 @@ function MainApp() {
         <h2 className="text-xl font-bold font-serif text-[#1B4332]">Ileya Afrika Verified Stays</h2>
         <p className="text-xs text-[#6B756F] mt-1.5 flex items-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
-          <span>Synchronizing verified session...</span>
+          <span>Verifying authentication session...</span>
         </p>
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // View 1: Auth Portal (Explicit /auth route or unauthenticated access to protected host/admin routes)
+  // 1. Strict Authentication Guard:
+  // If unauthenticated or on login route, ALWAYS render the AuthPortal.
+  // Unauthenticated users CANNOT see Guest, Host, or Admin dashboards.
   // -------------------------------------------------------------
-  const isProtectedHostOrAdminRoute =
-    currentRoute === '/admin-dashboard' ||
-    currentRoute === '/host-dashboard' ||
-    currentRoute === '/host/new-listing' ||
-    currentRoute === '/host/payout-settings';
-
-  if (currentRoute === '/auth' || (!currentUser?.isAuthenticated && isProtectedHostOrAdminRoute)) {
+  if (!isAuthenticated || currentRoute === '/login' || currentRoute === '/auth') {
     return (
       <AuthPortal
         onSuccess={handleAuthSuccess}
-        currentPath={currentRoute}
+        currentPath="/login"
         onNavigate={navigateTo}
         adminEmails={adminEmails}
       />
@@ -210,24 +241,11 @@ function MainApp() {
   }
 
   // -------------------------------------------------------------
-  // View 2: Full Admin Operations Dashboard (/admin-dashboard)
+  // 2. Role-Based Dashboard Redirection & Access Enforcement
   // -------------------------------------------------------------
-  if (
-    currentRoute === '/admin-dashboard' ||
-    currentUser?.role === 'admin' ||
-    currentUser?.role === 'master_admin'
-  ) {
-    if (!currentUser?.isAuthenticated || (currentUser?.role !== 'admin' && currentUser?.role !== 'master_admin')) {
-      return (
-        <AuthPortal
-          onSuccess={handleAuthSuccess}
-          currentPath="/admin-dashboard"
-          onNavigate={navigateTo}
-          adminEmails={adminEmails}
-        />
-      );
-    }
 
+  // View A: Master Admin & Operational Admin Portal
+  if (currentUser?.role === 'admin' || currentUser?.role === 'master_admin') {
     return (
       <AdminDashboard
         session={currentUser}
@@ -246,26 +264,8 @@ function MainApp() {
     );
   }
 
-  // -------------------------------------------------------------
-  // View 3: Host Partner Portal (/host-dashboard)
-  // -------------------------------------------------------------
-  if (
-    currentRoute === '/host-dashboard' ||
-    currentRoute === '/host/new-listing' ||
-    currentRoute === '/host/payout-settings' ||
-    currentUser?.role === 'host'
-  ) {
-    if (!currentUser?.isAuthenticated || currentUser?.role !== 'host') {
-      return (
-        <AuthPortal
-          onSuccess={handleAuthSuccess}
-          currentPath={currentRoute}
-          onNavigate={navigateTo}
-          adminEmails={adminEmails}
-        />
-      );
-    }
-
+  // View B: Host Partner Portal
+  if (currentUser?.role === 'host') {
     return (
       <div className="min-h-screen bg-[#FBF6EC] text-[#14231C] flex flex-col">
         {/* Top Host Navigation Header */}
@@ -327,9 +327,7 @@ function MainApp() {
     );
   }
 
-  // -------------------------------------------------------------
-  // View 4: Guest Discovery & Booking Experience (/guest-dashboard or default)
-  // -------------------------------------------------------------
+  // View C: Verified Guest Experience (Only for authenticated users with 'guest' role)
   return (
     <GuestDashboard
       session={currentUser}
@@ -344,7 +342,6 @@ export default function App() {
   return (
     <AppProvider>
       <MainApp />
-      <SupabaseDiagnosticRoutine autoRunOnMount={true} defaultOpen={false} />
     </AppProvider>
   );
 }
