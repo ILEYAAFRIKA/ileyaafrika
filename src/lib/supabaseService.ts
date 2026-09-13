@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { generateUUID, isValidUUID } from './uuid';
 import {
   RegisteredUser,
   PropertyListing,
@@ -92,25 +93,47 @@ export async function getUserByEmailFromSupabase(email: string): Promise<Registe
 
 /**
  * Save or Upsert User profile in Supabase
+ * Note: Guest checkout is completely decoupled from profiles. The profiles table has a strict
+ * foreign key constraint (profiles_id_fkey) referencing auth.users(id). Only users created
+ * through supabase.auth.signUp() are written to profiles.
  */
 export async function saveUserDocToSupabase(user: RegisteredUser): Promise<void> {
-  const payload = {
-    id: user?.uid || user?.id || '',
-    email: user?.email ? user.email.trim().toLowerCase() : '',
-    full_name: user?.fullName || '',
-    role: user?.role || 'guest',
-    created_at: user?.createdAt || new Date().toISOString(),
-  };
+  try {
+    const targetId = user?.uid || user?.id || '';
+    if (!targetId) return;
 
-  console.log("PAYLOAD:", payload);
+    // Check if there is an active authenticated auth session matching target user
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData?.user || authData.user.id !== targetId) {
+      // Completely decoupled: Never insert guests into profiles table to prevent foreign key violations
+      console.log('[Decoupled Profiles] Bypassing profiles table insert for unauthenticated guest:', targetId);
+      return;
+    }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert(payload, { onConflict: 'id' });
+    const payload = {
+      id: targetId,
+      email: user?.email ? user.email.trim().toLowerCase() : '',
+      full_name: user?.fullName || '',
+      role: user?.role || 'guest',
+      created_at: user?.createdAt || new Date().toISOString(),
+    };
 
-  if (error) {
-    console.error('Supabase profiles upsert error:', error);
-    throw error;
+    console.log("PAYLOAD:", payload);
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      if (error.code === '23503') {
+        console.warn('[Decoupled Profiles] Foreign key constraint profiles_id_fkey bypassed:', error.message);
+        return;
+      }
+      console.error('Supabase profiles upsert error:', error);
+      throw error;
+    }
+  } catch (err: any) {
+    console.warn('[Decoupled Profiles] Profile save safely handled:', err?.message || err);
   }
 }
 
@@ -228,31 +251,18 @@ export async function deleteListingFromSupabase(id: string): Promise<void> {
  * Save / Insert Booking in Supabase
  */
 export async function saveBookingToSupabase(booking: GuestBooking): Promise<void> {
+  const bookingId = isValidUUID(booking.id) ? booking.id : generateUUID();
   const record: Record<string, any> = {
-    id: booking.id,
+    id: bookingId,
     listing_id: booking.listingId,
-    listing_title: booking.listingTitle,
-    listing_photo: booking.listingPhoto,
-    property_type: booking.propertyType,
-    state: booking.state,
-    city_area: booking.cityArea,
-    street_address: booking.streetAddress,
-    host_full_name: booking.hostFullName,
-    host_whatsapp: booking.hostWhatsApp,
-    host_email: booking.hostEmail?.toLowerCase(),
-    guest_full_name: booking.guestFullName,
-    guest_email: booking.guestEmail?.toLowerCase(),
-    guest_phone: booking.guestPhone || '',
+    guest_name: booking.guestFullName || 'Valued Guest',
+    guest_email: booking.guestEmail?.toLowerCase() || 'guest@ileya.ng',
+    amount_paid: booking.totalAmount ?? booking.totalPrice ?? 0,
     check_in_date: booking.checkInDate,
     check_out_date: booking.checkOutDate,
-    guests_count: booking.guestsCount,
-    total_price: booking.totalPrice,
-    total_amount: booking.totalAmount ?? booking.totalPrice,
-    nights: booking.nights,
-    booked_at: booking.bookedAt,
-    status: booking.status,
     payment_status: booking.paymentStatus || 'completed',
     payment_reference: booking.paymentReference || '',
+    booked_at: booking.bookedAt || new Date().toISOString(),
   };
 
   console.log("PAYLOAD:", record);
@@ -325,32 +335,18 @@ export function isPostgresExclusionError(err: any): boolean {
  */
 export async function insertBookingToSupabase(params: CreateBookingParams): Promise<{ data: any; error: any }> {
   try {
-    const bookingId = params.id || `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const bookingId = isValidUUID(params.id || '') ? (params.id as string) : generateUUID();
     const record: Record<string, any> = {
       id: bookingId,
       listing_id: params.listingId,
-      listing_title: params.listingTitle || '',
-      listing_photo: params.listingPhoto || '',
-      property_type: params.propertyType || '',
-      state: params.state || '',
-      city_area: params.cityArea || '',
-      street_address: params.streetAddress || '',
-      host_full_name: params.hostFullName || 'Host Partner',
-      host_whatsapp: params.hostWhatsApp || '',
-      host_email: params.hostEmail?.toLowerCase() || '',
-      guest_full_name: params.guestFullName,
-      guest_email: params.guestEmail?.toLowerCase(),
-      guest_phone: params.guestPhone || '',
+      guest_name: params.guestFullName || 'Valued Guest',
+      guest_email: params.guestEmail?.toLowerCase() || 'guest@ileya.ng',
+      amount_paid: params.totalAmount || params.totalPrice || 0,
       check_in_date: params.checkInDate,
       check_out_date: params.checkOutDate,
-      guests_count: params.guestsCount,
-      total_amount: params.totalAmount,
-      total_price: params.totalPrice ?? params.totalAmount,
-      nights: params.nights,
-      payment_reference: params.paymentReference,
       payment_status: params.paymentStatus || 'completed',
+      payment_reference: params.paymentReference || '',
       booked_at: new Date().toISOString(),
-      status: params.status || 'confirmed',
     };
 
     // Pre-insert verification for date overlaps
@@ -489,17 +485,17 @@ export async function getCompletedBookingsForListing(listingId: string): Promise
       hostFullName: row.host_full_name,
       hostWhatsApp: row.host_whatsapp,
       hostEmail: row.host_email,
-      guestFullName: row.guest_full_name,
-      guestEmail: row.guest_email,
-      guestPhone: row.guest_phone,
+      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
+      guestEmail: row.guest_email || '',
+      guestPhone: row.guest_phone || '',
       checkInDate: row.check_in_date,
       checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count,
-      totalPrice: row.total_price || row.total_amount || 0,
-      totalAmount: row.total_amount || row.total_price || 0,
-      nights: row.nights,
-      bookedAt: row.booked_at,
-      status: row.status,
+      guestsCount: row.guests_count || 1,
+      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
+      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
+      nights: Number(row.nights || 1),
+      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
+      status: row.status || 'confirmed',
       paymentStatus: row.payment_status || 'completed',
       paymentReference: row.payment_reference || '',
     }));
@@ -650,17 +646,17 @@ export async function getBookingsForListing(listingId: string): Promise<GuestBoo
       hostFullName: row.host_full_name,
       hostWhatsApp: row.host_whatsapp,
       hostEmail: row.host_email,
-      guestFullName: row.guest_full_name,
-      guestEmail: row.guest_email,
-      guestPhone: row.guest_phone,
+      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
+      guestEmail: row.guest_email || '',
+      guestPhone: row.guest_phone || '',
       checkInDate: row.check_in_date,
       checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count,
-      totalPrice: row.total_price || row.total_amount || 0,
-      totalAmount: row.total_amount || row.total_price || 0,
-      nights: row.nights,
-      bookedAt: row.booked_at,
-      status: row.status,
+      guestsCount: row.guests_count || 1,
+      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
+      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
+      nights: Number(row.nights || 1),
+      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
+      status: row.status || 'confirmed',
       paymentStatus: row.payment_status || 'completed',
       paymentReference: row.payment_reference || '',
     }));
@@ -698,16 +694,16 @@ export async function getAllBookingsFromSupabase(): Promise<GuestBooking[]> {
       hostFullName: row.host_full_name,
       hostWhatsApp: row.host_whatsapp,
       hostEmail: row.host_email,
-      guestFullName: row.guest_full_name,
-      guestEmail: row.guest_email,
-      guestPhone: row.guest_phone,
+      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
+      guestEmail: row.guest_email || '',
+      guestPhone: row.guest_phone || '',
       checkInDate: row.check_in_date,
       checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count,
-      totalPrice: Number(row.total_price || row.total_amount || 0),
-      totalAmount: Number(row.total_amount || row.total_price || 0),
+      guestsCount: row.guests_count || 1,
+      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
+      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
       nights: Number(row.nights || 1),
-      bookedAt: row.booked_at,
+      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
       status: row.status || 'confirmed',
       paymentStatus: row.payment_status || 'completed',
       paymentReference: row.payment_reference || '',

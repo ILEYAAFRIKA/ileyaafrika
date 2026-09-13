@@ -21,7 +21,8 @@ import {
   FileText,
   DollarSign,
   TrendingUp,
-  Users
+  Users,
+  Database
 } from 'lucide-react';
 import { GuestBooking, PropertyListing } from '../../types';
 import {
@@ -201,16 +202,32 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => loadData(true)}
-          disabled={isRefreshing}
-          id="refresh-bookings-btn"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#FBF6EC] text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#E8A33D]' : ''}`} />
-          <span>{isRefreshing ? 'Refreshing...' : 'Refresh Records'}</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const trigger = document.getElementById('supabase-diagnostic-trigger');
+              if (trigger) trigger.click();
+            }}
+            id="admin-run-diagnostics-btn"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1B4332] text-white hover:bg-[#143427] text-xs font-bold transition-all shadow-xs cursor-pointer border border-[#E8A33D]/40"
+            title="Open Automated Supabase & Booking Diagnostic Panel"
+          >
+            <Database className="w-3.5 h-3.5 text-[#E8A33D]" />
+            <span>Run Diagnostics</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => loadData(true)}
+            disabled={isRefreshing}
+            id="refresh-bookings-btn"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#FBF6EC] text-xs font-bold transition-all shadow-xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#E8A33D]' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh Records'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Metrics Summary Cards */}

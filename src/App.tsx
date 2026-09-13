@@ -7,6 +7,7 @@ import { ListingCreationForm } from './components/host/ListingCreationForm';
 import { HostPayoutSettings } from './components/host/HostPayoutSettings';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { GuestDashboard } from './components/guest/GuestDashboard';
+import { SupabaseDiagnosticRoutine } from './components/SupabaseDiagnosticRoutine';
 import {
   UserRole,
   UserSession,
@@ -343,6 +344,7 @@ export default function App() {
   return (
     <AppProvider>
       <MainApp />
+      <SupabaseDiagnosticRoutine autoRunOnMount={true} defaultOpen={false} />
     </AppProvider>
   );
 }

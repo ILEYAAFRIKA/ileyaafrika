@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { PropertyListing, GuestBooking } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { generateUUID } from '../../lib/uuid';
 import {
   insertBookingToSupabase,
   getCompletedBookingsForListing,
@@ -145,6 +146,7 @@ export const BookNow: React.FC<BookNowProps> = ({
   const [bookedIntervals, setBookedIntervals] = useState<{ start: Date; end: Date }[]>([]);
   const [completedBookings, setCompletedBookings] = useState<GuestBooking[]>([]);
   const [completedBooking, setCompletedBooking] = useState<GuestBooking | null>(null);
+  const isAwaitingInsertRef = React.useRef<boolean>(false);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -343,6 +345,7 @@ export const BookNow: React.FC<BookNowProps> = ({
   // Callback on successful Paystack payment
   const handlePaystackSuccess = async (response: any) => {
     try {
+      isAwaitingInsertRef.current = true;
       setIsProcessing(true);
       setErrorMessage(null);
 
@@ -360,7 +363,8 @@ export const BookNow: React.FC<BookNowProps> = ({
         ? checkOutDate.toISOString().split('T')[0]
         : new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
 
-      const bookingId = `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // RFC4122 v4 UUID for PostgreSQL uuid primary key
+      const bookingId = generateUUID();
 
       const newBooking: GuestBooking = {
         id: bookingId,
@@ -389,46 +393,40 @@ export const BookNow: React.FC<BookNowProps> = ({
         paymentReference: paystackReference,
       };
 
-      // Exact database schema payload for bookings table
+      // Exact database schema payload for bookings table in Supabase.
+      // STRICT DECOUPLING: Guest checkout is completely decoupled from the 'profiles' table.
+      // Customer identity is stored directly in 'bookings' using 'guest_name' and 'guest_email'.
+      // No attempt is made to insert or upsert into 'profiles', preventing profiles_id_fkey violations.
       const payload: Record<string, any> = {
         id: bookingId,
         listing_id: listing.id,
-        listing_title: listingTitle,
-        listing_photo: listingPhoto,
-        property_type: propertyType,
-        state: state,
-        city_area: cityArea,
-        street_address: streetAddress,
-        host_full_name: hostFullName,
-        host_whatsapp: hostWhatsApp,
-        host_email: hostEmail,
-        guest_full_name: guestName.trim() || 'Valued Guest',
+        guest_name: guestName.trim() || 'Valued Guest',
         guest_email: guestEmailAddress.trim() || 'guest@ileya.ng',
-        guest_phone: guestPhoneNumber.trim() || '',
+        amount_paid: totalAmount,
         check_in_date: formattedCheckIn,
         check_out_date: formattedCheckOut,
-        guests_count: guestsCount,
-        total_amount: totalAmount,
-        total_price: totalAmount,
-        nights: nights,
-        payment_reference: paystackReference,
         payment_status: 'completed',
+        payment_reference: paystackReference,
         booked_at: new Date().toISOString(),
-        status: 'confirmed',
       };
 
-      console.log("PAYLOAD:", payload);
+      console.log("[Decoupled Checkout] Writing booking directly to bookings table (bypassing profiles):", payload);
 
-      const { data, error } = await supabase
+      // Directly write to bookings table immediately after Paystack succeeds
+      const { data, error, status: httpStatus } = await supabase
         .from('bookings')
-        .insert([payload]);
+        .insert([payload])
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("[Decoupled Checkout] Supabase insert error on bookings table:", error, "HTTP Status:", httpStatus);
+        throw error;
+      }
 
-      // Add booking to application context state
+      console.log("[Decoupled Checkout] Booking confirmed and persisted in database:", data);
+
+      // Now that the record is securely persisted in Supabase, update state and notify parents
       addBooking(newBooking);
-
-      // Mark completed and trigger callback
       setCompletedBooking(newBooking);
       if (onSuccessBooking) {
         onSuccessBooking(newBooking);
@@ -448,11 +446,12 @@ export const BookNow: React.FC<BookNowProps> = ({
         return;
       }
 
-      const alertMsg = `Booking failed to save: ${detailedMessage}`;
+      const alertMsg = `Booking failed to save in Supabase: ${detailedMessage}`;
       showToast(alertMsg);
       setErrorMessage(alertMsg);
       alert(alertMsg);
     } finally {
+      isAwaitingInsertRef.current = false;
       setIsProcessing(false);
     }
   };
