@@ -335,13 +335,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
 
     addBooking(newBooking);
 
-    // 3. Automated email dispatch simulation requirement:
-    const hostEmail = selectedListingForBooking.hostEmail || 'host@ileya.ng';
-    console.log(
-      `Email sent to host at: ${hostEmail} - Your apartment has been booked!`
-    );
-
-    // 4. Open Booking Confirmation Modal with Directions & 24/7 Support
+    // Open Booking Confirmation Modal with Directions & 24/7 Support
     setConfirmedBookingData({
       listing: {
         ...selectedListingForBooking,

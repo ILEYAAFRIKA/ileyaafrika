@@ -6,13 +6,6 @@ import {
   MessageCircle,
   ExternalLink,
   ShieldCheck,
-  Building2,
-  Share2,
-  Phone,
-  Mail,
-  ArrowRight,
-  Clock,
-  Sparkles
 } from 'lucide-react';
 import { PropertyListing } from '../../types';
 
@@ -155,12 +148,10 @@ export const BookingConfirmationModal: React.FC<BookingConfirmationModalProps> =
             </a>
           </div>
 
-          {/* Host Simulated Email Dispatch Notice */}
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs flex items-center gap-2">
-            <Mail className="w-4 h-4 text-slate-500 shrink-0" />
-            <span>
-              Automated reservation dispatch sent to Host (<strong>{listing.hostEmail || 'host@ileya.ng'}</strong>) and Guest (<strong>{guestEmail}</strong>).
-            </span>
+          {/* Booking Success Notification */}
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Booking successful! Your dates have been reserved.</span>
           </div>
         </div>
 

@@ -257,6 +257,34 @@ export interface CreateBookingParams {
 }
 
 /**
+ * Checks whether an error from PostgreSQL/Supabase represents an exclusion
+ * constraint violation (code 23P01) or date overlap collision.
+ */
+export function isPostgresExclusionError(err: any): boolean {
+  if (!err) return false;
+  const code = String(err.code || err.statusCode || '');
+  const msg = String(err.message || '').toLowerCase();
+  const details = String(err.details || '').toLowerCase();
+  const hint = String(err.hint || '').toLowerCase();
+
+  return (
+    code === '23P01' || // PostgreSQL exclusion_violation
+    code === '23505' || // PostgreSQL unique_violation
+    code === 'P0001' || // PL/pgSQL RAISE EXCEPTION
+    code === '40001' || // serialization_failure
+    msg.includes('exclusion') ||
+    msg.includes('overlap') ||
+    msg.includes('conflict') ||
+    msg.includes('already booked') ||
+    msg.includes('duplicate') ||
+    details.includes('exclusion') ||
+    details.includes('overlap') ||
+    details.includes('conflict') ||
+    hint.includes('overlap')
+  );
+}
+
+/**
  * Insert a new completed booking row directly into Supabase bookings table
  */
 export async function insertBookingToSupabase(params: CreateBookingParams): Promise<{ data: any; error: any }> {
@@ -289,6 +317,21 @@ export async function insertBookingToSupabase(params: CreateBookingParams): Prom
       status: params.status || 'confirmed',
     };
 
+    // Pre-insert verification for date overlaps
+    const { hasOverlap } = await checkBookingOverlap(
+      params.listingId,
+      params.checkInDate,
+      params.checkOutDate
+    );
+    if (hasOverlap) {
+      const exclusionErr = {
+        code: '23P01',
+        message: 'conflicting key value violates exclusion constraint: date range overlaps with existing booking',
+        details: 'Key (listing_id, daterange(check_in_date, check_out_date)) conflicts with existing key.',
+      };
+      return { data: null, error: exclusionErr };
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .insert([record])
@@ -296,12 +339,20 @@ export async function insertBookingToSupabase(params: CreateBookingParams): Prom
 
     if (error) {
       console.warn('Supabase direct insert booking warning:', error.message);
-      // Fallback to upsert
+      // If error is a PostgreSQL exclusion constraint, do NOT swallow it
+      if (isPostgresExclusionError(error)) {
+        return { data: null, error };
+      }
+
+      // Fallback to upsert for non-exclusion schema variations
       const { error: upsertErr } = await supabase
         .from('bookings')
         .upsert(record, { onConflict: 'id' });
       if (upsertErr) {
         console.warn('Supabase upsert booking fallback warning:', upsertErr.message);
+        if (isPostgresExclusionError(upsertErr)) {
+          return { data: null, error: upsertErr };
+        }
       }
       return { data: [record], error: null };
     }

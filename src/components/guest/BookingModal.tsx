@@ -14,6 +14,8 @@ interface BookingModalProps {
   listing: PropertyListing;
   guestFullName: string;
   guestEmail: string;
+  initialCheckInDate?: Date | null;
+  initialCheckOutDate?: Date | null;
   onClose: () => void;
   onConfirmBooking: (bookingData: GuestBooking | {
     listingId: string;
@@ -31,6 +33,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   listing,
   guestFullName,
   guestEmail,
+  initialCheckInDate = null,
+  initialCheckOutDate = null,
   onClose,
   onConfirmBooking,
 }) => {
@@ -182,6 +186,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 listing={listing}
                 guestFullName={guestFullName}
                 guestEmail={guestEmail}
+                initialCheckInDate={initialCheckInDate}
+                initialCheckOutDate={initialCheckOutDate}
                 onClose={onClose}
                 onSuccessBooking={(booking: GuestBooking) => {
                   onConfirmBooking(booking);

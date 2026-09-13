@@ -22,12 +22,14 @@ import {
   X
 } from 'lucide-react';
 import { PropertyListing, GuestBooking } from '../../types';
+import { supabase } from '../../lib/supabase';
 import {
   insertBookingToSupabase,
   getCompletedBookingsForListing,
   checkBookingOverlap,
   parseLocalDate,
   formatDateToYYYYMMDD,
+  isPostgresExclusionError,
 } from '../../lib/supabaseService';
 import { useApp } from '../../context/AppContext';
 
@@ -60,6 +62,8 @@ export interface BookNowProps {
   guestFullName?: string;
   guestEmail?: string;
   guestPhone?: string;
+  initialCheckInDate?: Date | null;
+  initialCheckOutDate?: Date | null;
   onSuccessBooking?: (booking: GuestBooking) => void;
   onClose?: () => void;
   className?: string;
@@ -75,6 +79,8 @@ export const BookNow: React.FC<BookNowProps> = ({
   guestFullName = '',
   guestEmail = '',
   guestPhone = '',
+  initialCheckInDate = null,
+  initialCheckOutDate = null,
   onSuccessBooking,
   onClose,
   className = '',
@@ -109,21 +115,14 @@ export const BookNow: React.FC<BookNowProps> = ({
     return d;
   }, []);
 
-  const defaultCheckIn = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
-  const defaultCheckOut = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 2);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
-  const [checkInDate, setCheckInDate] = useState<Date | null>(defaultCheckIn);
-  const [checkOutDate, setCheckOutDate] = useState<Date | null>(defaultCheckOut);
+  const [checkInDate, setCheckInDate] = useState<Date | null>(() => {
+    if (initialCheckInDate && initialCheckInDate >= today) return initialCheckInDate;
+    return null;
+  });
+  const [checkOutDate, setCheckOutDate] = useState<Date | null>(() => {
+    if (initialCheckOutDate && initialCheckOutDate > today) return initialCheckOutDate;
+    return null;
+  });
   const [guestsCount, setGuestsCount] = useState<number>(1);
 
   // Guest Contact details
@@ -141,47 +140,84 @@ export const BookNow: React.FC<BookNowProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [disabledDates, setDisabledDates] = useState<Date[]>([]);
+  const [disabledDateStrings, setDisabledDateStrings] = useState<Set<string>>(new Set());
   const [bookedIntervals, setBookedIntervals] = useState<{ start: Date; end: Date }[]>([]);
   const [completedBookings, setCompletedBookings] = useState<GuestBooking[]>([]);
   const [completedBooking, setCompletedBooking] = useState<GuestBooking | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage((current) => (current === msg ? null : current));
+    }, 6000);
   }, []);
 
-  // Fetch existing completed bookings to block dates on the calendar
+  // Fetch existing completed bookings directly from Supabase to block dates on the calendar
   const fetchListingBookings = useCallback(async () => {
     if (!listing.id) return;
     try {
-      // Fetch all records from the bookings table for this specific listing_id where payment_status = 'completed'
-      const completed = await getCompletedBookingsForListing(listing.id);
-      setCompletedBookings(completed);
-      const intervals = completed
-        .map((b) => {
-          const start = parseLocalDate(b.checkInDate);
-          const end = parseLocalDate(b.checkOutDate);
-          return { start, end };
-        })
-        .filter(
-          (interval) =>
-            !isNaN(interval.start.getTime()) && !isNaN(interval.end.getTime())
-        );
-      setBookedIntervals(intervals);
+      // Actively query the bookings table for this specific listing_id where payment_status = 'completed'
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('listing_id', listing.id)
+        .eq('payment_status', 'completed');
 
-      // Advance initial check-in date if it overlaps with any existing booking
+      let rows: any[] = data || [];
+      if (error || rows.length === 0) {
+        // Fallback helper in case of column status casing variations
+        rows = await getCompletedBookingsForListing(listing.id);
+      }
+
+      setCompletedBookings(rows);
+
+      // Correctly map over the returned rows and disable all dates between check_in_date and check_out_date
+      const allBlockedDates: Date[] = [];
+      const blockedDateStrings = new Set<string>();
+      const intervals: { start: Date; end: Date }[] = [];
+
+      rows.forEach((b: any) => {
+        const checkInStr = b.check_in_date || b.checkInDate;
+        const checkOutStr = b.check_out_date || b.checkOutDate;
+        if (!checkInStr || !checkOutStr) return;
+
+        const start = parseLocalDate(checkInStr);
+        const end = parseLocalDate(checkOutStr);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+
+        intervals.push({ start, end });
+
+        // Generate and disable all dates between check_in_date and check_out_date
+        const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+        const stop = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 0, 0, 0, 0);
+
+        while (cur <= stop) {
+          const key = formatDateToYYYYMMDD(cur);
+          if (!blockedDateStrings.has(key)) {
+            blockedDateStrings.add(key);
+            allBlockedDates.push(new Date(cur));
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+      });
+
+      setBookedIntervals(intervals);
+      setDisabledDates(allBlockedDates);
+      setDisabledDateStrings(blockedDateStrings);
+
+      // If currently selected check-in date is booked, clear it
       setCheckInDate((currentCheckIn) => {
         if (!currentCheckIn) return currentCheckIn;
-        const isOverlap = intervals.some(
-          (inv) => currentCheckIn >= inv.start && currentCheckIn < inv.end
-        );
-        if (isOverlap) {
-          const nextDay = new Date(currentCheckIn);
-          while (intervals.some((inv) => nextDay >= inv.start && nextDay < inv.end)) {
-            nextDay.setDate(nextDay.getDate() + 1);
-          }
-          return nextDay;
-        }
-        return currentCheckIn;
+        const key = formatDateToYYYYMMDD(currentCheckIn);
+        return blockedDateStrings.has(key) ? null : currentCheckIn;
+      });
+
+      // If currently selected check-out date is booked, clear it
+      setCheckOutDate((currentCheckOut) => {
+        if (!currentCheckOut) return currentCheckOut;
+        const key = formatDateToYYYYMMDD(currentCheckOut);
+        return blockedDateStrings.has(key) ? null : currentCheckOut;
       });
     } catch (err) {
       console.warn('Could not fetch completed bookings for listing:', err);
@@ -190,7 +226,28 @@ export const BookNow: React.FC<BookNowProps> = ({
 
   useEffect(() => {
     fetchListingBookings();
-  }, [fetchListingBookings]);
+
+    if (!listing.id) return;
+    const channel = supabase
+      .channel(`listing-bookings-sync-${listing.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: `listing_id=eq.${listing.id}`,
+        },
+        () => {
+          fetchListingBookings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [listing.id, fetchListingBookings]);
 
   // Calculate nights and total amount
   const calculateNights = (): number => {
@@ -203,9 +260,34 @@ export const BookNow: React.FC<BookNowProps> = ({
   const nights = calculateNights();
   const totalAmount = nights * pricePerDay;
 
+  // Maximum checkout date to prevent jumping over existing reservations
+  const maxAllowedCheckOutDate = useMemo(() => {
+    if (!checkInDate) return null;
+    const futureBookings = bookedIntervals
+      .filter((inv) => inv.start.getTime() > checkInDate.getTime())
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    if (futureBookings.length > 0) {
+      return futureBookings[0].start;
+    }
+    return null;
+  }, [checkInDate, bookedIntervals]);
+
   // Check for calendar overlaps
   const isDateRangeBlocked = (): boolean => {
     if (!checkInDate || !checkOutDate) return false;
+
+    // Check every day between checkIn and checkOut
+    const cur = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate(), 0, 0, 0, 0);
+    const stop = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate(), 0, 0, 0, 0);
+
+    while (cur < stop) {
+      if (disabledDateStrings.has(formatDateToYYYYMMDD(cur))) {
+        return true;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
     return bookedIntervals.some((interval) => {
       return (
         checkInDate.getTime() < interval.end.getTime() &&
@@ -308,7 +390,7 @@ export const BookNow: React.FC<BookNowProps> = ({
 
     try {
       // 1. Insert new row directly into Supabase bookings table with payment_status = 'completed'
-      await insertBookingToSupabase({
+      const { data, error } = await insertBookingToSupabase({
         id: bookingId,
         listingId: listing.id,
         listingTitle,
@@ -334,6 +416,15 @@ export const BookNow: React.FC<BookNowProps> = ({
         status: 'confirmed',
       });
 
+      if (error && isPostgresExclusionError(error)) {
+        setIsProcessing(false);
+        const doubleBookingError = 'Sorry, those dates were just booked.';
+        showToast(doubleBookingError);
+        setErrorMessage(doubleBookingError);
+        await fetchListingBookings();
+        return;
+      }
+
       // 2. Add booking to application context state
       addBooking(newBooking);
 
@@ -346,7 +437,16 @@ export const BookNow: React.FC<BookNowProps> = ({
       fetchListingBookings();
     } catch (err: any) {
       console.error('Error recording booking after Paystack checkout:', err);
-      // Still persist locally and show confirmation
+      if (isPostgresExclusionError(err)) {
+        setIsProcessing(false);
+        const doubleBookingError = 'Sorry, those dates were just booked.';
+        showToast(doubleBookingError);
+        setErrorMessage(doubleBookingError);
+        await fetchListingBookings();
+        return;
+      }
+
+      // Fallback local persistence
       addBooking(newBooking);
       setCompletedBooking(newBooking);
       if (onSuccessBooking) {
@@ -381,9 +481,10 @@ export const BookNow: React.FC<BookNowProps> = ({
     }
 
     if (isDateRangeBlocked()) {
-      setErrorMessage(
-        'The selected dates conflict with an existing reservation. Please choose available dates.'
-      );
+      const msg = 'Sorry, those dates were just booked.';
+      showToast(msg);
+      setErrorMessage(msg);
+      await fetchListingBookings();
       return;
     }
 
@@ -402,11 +503,7 @@ export const BookNow: React.FC<BookNowProps> = ({
     const formattedCheckIn = formatDateToYYYYMMDD(checkInDate);
     const formattedCheckOut = formatDateToYYYYMMDD(checkOutDate);
 
-    // THE PRE-PAYMENT DOUBLE-BOOKING GUARD:
-    // In the checkout flow, right before triggering the Paystack modal, implement a strict Supabase check.
-    // Query the bookings table to see if any 'completed' bookings overlap with the user's selected
-    // check_in_date and check_out_date. If an overlap exists, abort the Paystack initialization and show a toast error:
-    // "Sorry, these dates were just booked by someone else."
+    // Strict Supabase check: query bookings table to see if any completed bookings overlap
     try {
       const { hasOverlap } = await checkBookingOverlap(
         listing.id,
@@ -416,15 +513,23 @@ export const BookNow: React.FC<BookNowProps> = ({
 
       if (hasOverlap) {
         setIsProcessing(false);
-        const doubleBookingError = 'Sorry, these dates were just booked by someone else.';
+        const doubleBookingError = 'Sorry, those dates were just booked.';
         showToast(doubleBookingError);
         setErrorMessage(doubleBookingError);
         // Refresh calendar date blocking immediately
         await fetchListingBookings();
         return;
       }
-    } catch (guardErr) {
+    } catch (guardErr: any) {
       console.warn('Pre-payment overlap verification check:', guardErr);
+      if (isPostgresExclusionError(guardErr)) {
+        setIsProcessing(false);
+        const doubleBookingError = 'Sorry, those dates were just booked.';
+        showToast(doubleBookingError);
+        setErrorMessage(doubleBookingError);
+        await fetchListingBookings();
+        return;
+      }
     }
 
     try {
@@ -472,6 +577,10 @@ export const BookNow: React.FC<BookNowProps> = ({
           <h3 className="text-xl sm:text-2xl font-bold font-serif text-[#1B4332]">
             Reservation Confirmed!
           </h3>
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>Booking successful! Your dates have been reserved.</span>
+          </div>
           <p className="text-xs text-[#6B756F] max-w-md mx-auto">
             Payment has been secured in Escrow. Your reservation for <strong className="text-[#14231C]">{listingTitle}</strong> is active.
           </p>
@@ -594,6 +703,15 @@ export const BookNow: React.FC<BookNowProps> = ({
               <DatePicker
                 selected={checkInDate}
                 onChange={(date: Date | null) => {
+                  if (date) {
+                    const dStr = formatDateToYYYYMMDD(date);
+                    if (disabledDateStrings.has(dStr)) {
+                      const msg = 'Sorry, those dates were just booked.';
+                      showToast(msg);
+                      setErrorMessage(msg);
+                      return;
+                    }
+                  }
                   setCheckInDate(date);
                   if (date && checkOutDate && date >= checkOutDate) {
                     const nextDay = new Date(date);
@@ -605,6 +723,8 @@ export const BookNow: React.FC<BookNowProps> = ({
                 startDate={checkInDate}
                 endDate={checkOutDate}
                 minDate={today}
+                excludeDates={disabledDates}
+                filterDate={(date: Date) => !disabledDateStrings.has(formatDateToYYYYMMDD(date))}
                 excludeDateIntervals={bookedIntervals}
                 placeholderText="Select Check-in"
                 className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs"
@@ -621,11 +741,30 @@ export const BookNow: React.FC<BookNowProps> = ({
             <div className="relative">
               <DatePicker
                 selected={checkOutDate}
-                onChange={(date: Date | null) => setCheckOutDate(date)}
+                onChange={(date: Date | null) => {
+                  if (date) {
+                    const dStr = formatDateToYYYYMMDD(date);
+                    if (disabledDateStrings.has(dStr)) {
+                      const msg = 'Sorry, those dates were just booked.';
+                      showToast(msg);
+                      setErrorMessage(msg);
+                      return;
+                    }
+                  }
+                  setCheckOutDate(date);
+                }}
                 selectsEnd
                 startDate={checkInDate}
                 endDate={checkOutDate}
                 minDate={checkInDate ? new Date(checkInDate.getTime() + 86400000) : today}
+                maxDate={maxAllowedCheckOutDate || undefined}
+                excludeDates={disabledDates}
+                filterDate={(date: Date) => {
+                  const dStr = formatDateToYYYYMMDD(date);
+                  if (disabledDateStrings.has(dStr)) return false;
+                  if (maxAllowedCheckOutDate && date > maxAllowedCheckOutDate) return false;
+                  return true;
+                }}
                 excludeDateIntervals={bookedIntervals}
                 placeholderText="Select Check-out"
                 className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs"
@@ -645,9 +784,9 @@ export const BookNow: React.FC<BookNowProps> = ({
             <span className="w-2 h-2 rounded-full bg-gray-400" />
             <span className="line-through text-gray-500">Grayed out = Booked</span>
           </div>
-          {bookedIntervals.length > 0 ? (
+          {disabledDates.length > 0 ? (
             <span className="font-mono text-[#1B4332] font-bold text-[10px] bg-[#1B4332]/10 px-2 py-0.5 rounded-md">
-              {bookedIntervals.length} Period{bookedIntervals.length > 1 ? 's' : ''} Reserved
+              {disabledDates.length} Date{disabledDates.length > 1 ? 's' : ''} Blocked
             </span>
           ) : (
             <span className="text-emerald-700 font-medium text-[10px]">
