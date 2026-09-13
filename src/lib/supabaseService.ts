@@ -11,6 +11,25 @@ import {
  */
 export async function getUserFromSupabase(uid: string): Promise<RegisteredUser | null> {
   try {
+    // Check profiles table first
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .maybeSingle();
+
+    if (!profileError && profileData) {
+      return {
+        id: profileData.id,
+        uid: profileData.id,
+        email: profileData.email,
+        fullName: profileData.full_name || profileData.fullName || '',
+        role: profileData.role || 'guest',
+        createdAt: profileData.created_at,
+      };
+    }
+
+    // Fallback check users table
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -34,6 +53,26 @@ export async function getUserFromSupabase(uid: string): Promise<RegisteredUser |
 export async function getUserByEmailFromSupabase(email: string): Promise<RegisteredUser | null> {
   try {
     const normalizedEmail = email.trim().toLowerCase();
+
+    // Check profiles table first
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (!profileError && profileData) {
+      return {
+        id: profileData.id,
+        uid: profileData.id,
+        email: profileData.email,
+        fullName: profileData.full_name || profileData.fullName || '',
+        role: profileData.role || 'guest',
+        createdAt: profileData.created_at,
+      };
+    }
+
+    // Fallback check users table
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -55,24 +94,23 @@ export async function getUserByEmailFromSupabase(email: string): Promise<Registe
  * Save or Upsert User profile in Supabase
  */
 export async function saveUserDocToSupabase(user: RegisteredUser): Promise<void> {
-  try {
-    const record = {
-      uid: user?.uid || user?.id || '',
-      email: user?.email ? user.email.trim().toLowerCase() : '',
-      full_name: user?.fullName || '',
-      role: user?.role || 'guest',
-      created_at: user?.createdAt || new Date().toISOString(),
-    };
+  const payload = {
+    id: user?.uid || user?.id || '',
+    email: user?.email ? user.email.trim().toLowerCase() : '',
+    full_name: user?.fullName || '',
+    role: user?.role || 'guest',
+    created_at: user?.createdAt || new Date().toISOString(),
+  };
 
-    const { error } = await supabase
-      .from('users')
-      .upsert(record, { onConflict: 'uid' });
+  console.log("PAYLOAD:", payload);
 
-    if (error) {
-      console.warn('Supabase upsert user warning:', error.message);
-    }
-  } catch (err) {
-    console.error('Supabase saveUser error:', err);
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(payload, { onConflict: 'id' });
+
+  if (error) {
+    console.error('Supabase profiles upsert error:', error);
+    throw error;
   }
 }
 
@@ -190,43 +228,41 @@ export async function deleteListingFromSupabase(id: string): Promise<void> {
  * Save / Insert Booking in Supabase
  */
 export async function saveBookingToSupabase(booking: GuestBooking): Promise<void> {
-  try {
-    const record: Record<string, any> = {
-      id: booking.id,
-      listing_id: booking.listingId,
-      listing_title: booking.listingTitle,
-      listing_photo: booking.listingPhoto,
-      property_type: booking.propertyType,
-      state: booking.state,
-      city_area: booking.cityArea,
-      street_address: booking.streetAddress,
-      host_full_name: booking.hostFullName,
-      host_whatsapp: booking.hostWhatsApp,
-      host_email: booking.hostEmail?.toLowerCase(),
-      guest_full_name: booking.guestFullName,
-      guest_email: booking.guestEmail?.toLowerCase(),
-      guest_phone: booking.guestPhone || '',
-      check_in_date: booking.checkInDate,
-      check_out_date: booking.checkOutDate,
-      guests_count: booking.guestsCount,
-      total_price: booking.totalPrice,
-      total_amount: booking.totalAmount ?? booking.totalPrice,
-      nights: booking.nights,
-      booked_at: booking.bookedAt,
-      status: booking.status,
-      payment_status: booking.paymentStatus || 'completed',
-      payment_reference: booking.paymentReference || '',
-    };
+  const record: Record<string, any> = {
+    id: booking.id,
+    listing_id: booking.listingId,
+    listing_title: booking.listingTitle,
+    listing_photo: booking.listingPhoto,
+    property_type: booking.propertyType,
+    state: booking.state,
+    city_area: booking.cityArea,
+    street_address: booking.streetAddress,
+    host_full_name: booking.hostFullName,
+    host_whatsapp: booking.hostWhatsApp,
+    host_email: booking.hostEmail?.toLowerCase(),
+    guest_full_name: booking.guestFullName,
+    guest_email: booking.guestEmail?.toLowerCase(),
+    guest_phone: booking.guestPhone || '',
+    check_in_date: booking.checkInDate,
+    check_out_date: booking.checkOutDate,
+    guests_count: booking.guestsCount,
+    total_price: booking.totalPrice,
+    total_amount: booking.totalAmount ?? booking.totalPrice,
+    nights: booking.nights,
+    booked_at: booking.bookedAt,
+    status: booking.status,
+    payment_status: booking.paymentStatus || 'completed',
+    payment_reference: booking.paymentReference || '',
+  };
 
-    const { error } = await supabase
-      .from('bookings')
-      .upsert(record, { onConflict: 'id' });
+  console.log("PAYLOAD:", record);
+  const { data, error } = await supabase
+    .from('bookings')
+    .upsert(record, { onConflict: 'id' });
 
-    if (error) {
-      console.warn('Supabase upsert booking warning:', error.message);
-    }
-  } catch (err) {
-    console.error('Supabase saveBooking error:', err);
+  if (error) {
+    console.error('Supabase upsert booking error:', error);
+    throw error;
   }
 }
 
@@ -332,35 +368,21 @@ export async function insertBookingToSupabase(params: CreateBookingParams): Prom
       return { data: null, error: exclusionErr };
     }
 
+    console.log("PAYLOAD:", record);
     const { data, error } = await supabase
       .from('bookings')
       .insert([record])
       .select();
 
     if (error) {
-      console.warn('Supabase direct insert booking warning:', error.message);
-      // If error is a PostgreSQL exclusion constraint, do NOT swallow it
-      if (isPostgresExclusionError(error)) {
-        return { data: null, error };
-      }
-
-      // Fallback to upsert for non-exclusion schema variations
-      const { error: upsertErr } = await supabase
-        .from('bookings')
-        .upsert(record, { onConflict: 'id' });
-      if (upsertErr) {
-        console.warn('Supabase upsert booking fallback warning:', upsertErr.message);
-        if (isPostgresExclusionError(upsertErr)) {
-          return { data: null, error: upsertErr };
-        }
-      }
-      return { data: [record], error: null };
+      console.error('Supabase direct insert booking error:', error);
+      throw error;
     }
 
     return { data, error: null };
   } catch (err: any) {
     console.error('Supabase insertBookingToSupabase error:', err);
-    return { data: null, error: err };
+    throw err;
   }
 }
 

@@ -342,55 +342,27 @@ export const BookNow: React.FC<BookNowProps> = ({
 
   // Callback on successful Paystack payment
   const handlePaystackSuccess = async (response: any) => {
-    setIsProcessing(true);
-    setErrorMessage(null);
-
-    const paystackReference =
-      response?.reference ||
-      response?.trxref ||
-      response?.trans ||
-      paystackConfig.reference ||
-      `PAY-${Date.now()}`;
-
-    const formattedCheckIn = checkInDate
-      ? checkInDate.toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0];
-    const formattedCheckOut = checkOutDate
-      ? checkOutDate.toISOString().split('T')[0]
-      : new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
-
-    const bookingId = `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    const newBooking: GuestBooking = {
-      id: bookingId,
-      listingId: listing.id,
-      listingTitle,
-      listingPhoto,
-      propertyType,
-      state,
-      cityArea,
-      streetAddress,
-      hostFullName,
-      hostWhatsApp,
-      hostEmail,
-      guestFullName: guestName.trim() || 'Valued Guest',
-      guestEmail: guestEmailAddress.trim() || 'guest@ileya.ng',
-      guestPhone: guestPhoneNumber.trim() || '',
-      checkInDate: formattedCheckIn,
-      checkOutDate: formattedCheckOut,
-      guestsCount,
-      totalPrice: totalAmount,
-      totalAmount,
-      nights,
-      bookedAt: new Date().toISOString(),
-      status: 'confirmed',
-      paymentStatus: 'completed',
-      paymentReference: paystackReference,
-    };
-
     try {
-      // 1. Insert new row directly into Supabase bookings table with payment_status = 'completed'
-      const { data, error } = await insertBookingToSupabase({
+      setIsProcessing(true);
+      setErrorMessage(null);
+
+      const paystackReference =
+        response?.reference ||
+        response?.trxref ||
+        response?.trans ||
+        paystackConfig.reference ||
+        `PAY-${Date.now()}`;
+
+      const formattedCheckIn = checkInDate
+        ? checkInDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      const formattedCheckOut = checkOutDate
+        ? checkOutDate.toISOString().split('T')[0]
+        : new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
+
+      const bookingId = `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      const newBooking: GuestBooking = {
         id: bookingId,
         listingId: listing.id,
         listingTitle,
@@ -408,51 +380,78 @@ export const BookNow: React.FC<BookNowProps> = ({
         checkInDate: formattedCheckIn,
         checkOutDate: formattedCheckOut,
         guestsCount,
-        totalAmount,
         totalPrice: totalAmount,
+        totalAmount,
         nights,
-        paymentReference: paystackReference,
-        paymentStatus: 'completed',
+        bookedAt: new Date().toISOString(),
         status: 'confirmed',
-      });
+        paymentStatus: 'completed',
+        paymentReference: paystackReference,
+      };
 
-      if (error && isPostgresExclusionError(error)) {
-        setIsProcessing(false);
-        const doubleBookingError = 'Sorry, those dates were just booked.';
-        showToast(doubleBookingError);
-        setErrorMessage(doubleBookingError);
-        await fetchListingBookings();
-        return;
-      }
+      // Exact database schema payload for bookings table
+      const payload: Record<string, any> = {
+        id: bookingId,
+        listing_id: listing.id,
+        listing_title: listingTitle,
+        listing_photo: listingPhoto,
+        property_type: propertyType,
+        state: state,
+        city_area: cityArea,
+        street_address: streetAddress,
+        host_full_name: hostFullName,
+        host_whatsapp: hostWhatsApp,
+        host_email: hostEmail,
+        guest_full_name: guestName.trim() || 'Valued Guest',
+        guest_email: guestEmailAddress.trim() || 'guest@ileya.ng',
+        guest_phone: guestPhoneNumber.trim() || '',
+        check_in_date: formattedCheckIn,
+        check_out_date: formattedCheckOut,
+        guests_count: guestsCount,
+        total_amount: totalAmount,
+        total_price: totalAmount,
+        nights: nights,
+        payment_reference: paystackReference,
+        payment_status: 'completed',
+        booked_at: new Date().toISOString(),
+        status: 'confirmed',
+      };
 
-      // 2. Add booking to application context state
+      console.log("PAYLOAD:", payload);
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      // Add booking to application context state
       addBooking(newBooking);
 
-      // 3. Mark completed and trigger callback
+      // Mark completed and trigger callback
       setCompletedBooking(newBooking);
       if (onSuccessBooking) {
         onSuccessBooking(newBooking);
       }
-      // Refresh local intervals
-      fetchListingBookings();
+      // Refresh local intervals and blocked dates
+      await fetchListingBookings();
     } catch (err: any) {
-      console.error('Error recording booking after Paystack checkout:', err);
+      console.error('Error recording booking in Supabase:', err);
+      const detailedMessage = err?.message || err?.details || JSON.stringify(err);
+
       if (isPostgresExclusionError(err)) {
-        setIsProcessing(false);
         const doubleBookingError = 'Sorry, those dates were just booked.';
         showToast(doubleBookingError);
         setErrorMessage(doubleBookingError);
+        alert(doubleBookingError);
         await fetchListingBookings();
         return;
       }
 
-      // Fallback local persistence
-      addBooking(newBooking);
-      setCompletedBooking(newBooking);
-      if (onSuccessBooking) {
-        onSuccessBooking(newBooking);
-      }
-      fetchListingBookings();
+      const alertMsg = `Booking failed to save: ${detailedMessage}`;
+      showToast(alertMsg);
+      setErrorMessage(alertMsg);
+      alert(alertMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -466,45 +465,46 @@ export const BookNow: React.FC<BookNowProps> = ({
 
   // Trigger Paystack Checkout flow with Pre-Payment Double-Booking Guard
   const handleInitiateCheckout = async () => {
-    setErrorMessage(null);
-    setToastMessage(null);
-
-    // Validate inputs
-    if (!checkInDate || !checkOutDate) {
-      setErrorMessage('Please select both Check-In and Check-Out dates.');
-      return;
-    }
-
-    if (nights <= 0) {
-      setErrorMessage('Check-Out date must be at least 1 day after Check-In.');
-      return;
-    }
-
-    if (isDateRangeBlocked()) {
-      const msg = 'Sorry, those dates were just booked.';
-      showToast(msg);
-      setErrorMessage(msg);
-      await fetchListingBookings();
-      return;
-    }
-
-    if (!guestEmailAddress.trim() || !guestEmailAddress.includes('@')) {
-      setErrorMessage('Please enter a valid guest email address for payment receipt.');
-      return;
-    }
-
-    if (!guestName.trim()) {
-      setErrorMessage('Please enter your full name for the booking reservation.');
-      return;
-    }
-
-    setIsProcessing(true);
-
-    const formattedCheckIn = formatDateToYYYYMMDD(checkInDate);
-    const formattedCheckOut = formatDateToYYYYMMDD(checkOutDate);
-
-    // Strict Supabase check: query bookings table to see if any completed bookings overlap
     try {
+      setErrorMessage(null);
+      setToastMessage(null);
+
+      // Validate inputs
+      if (!checkInDate || !checkOutDate) {
+        setErrorMessage('Please select both Check-In and Check-Out dates.');
+        return;
+      }
+
+      if (nights <= 0) {
+        setErrorMessage('Check-Out date must be at least 1 day after Check-In.');
+        return;
+      }
+
+      if (isDateRangeBlocked()) {
+        const msg = 'Sorry, those dates were just booked.';
+        showToast(msg);
+        setErrorMessage(msg);
+        alert(msg);
+        await fetchListingBookings();
+        return;
+      }
+
+      if (!guestEmailAddress.trim() || !guestEmailAddress.includes('@')) {
+        setErrorMessage('Please enter a valid guest email address for payment receipt.');
+        return;
+      }
+
+      if (!guestName.trim()) {
+        setErrorMessage('Please enter your full name for the booking reservation.');
+        return;
+      }
+
+      setIsProcessing(true);
+
+      const formattedCheckIn = formatDateToYYYYMMDD(checkInDate);
+      const formattedCheckOut = formatDateToYYYYMMDD(checkOutDate);
+
+      // Strict Supabase check: query bookings table to see if any completed bookings overlap
       const { hasOverlap } = await checkBookingOverlap(
         listing.id,
         formattedCheckIn,
@@ -516,23 +516,12 @@ export const BookNow: React.FC<BookNowProps> = ({
         const doubleBookingError = 'Sorry, those dates were just booked.';
         showToast(doubleBookingError);
         setErrorMessage(doubleBookingError);
+        alert(doubleBookingError);
         // Refresh calendar date blocking immediately
         await fetchListingBookings();
         return;
       }
-    } catch (guardErr: any) {
-      console.warn('Pre-payment overlap verification check:', guardErr);
-      if (isPostgresExclusionError(guardErr)) {
-        setIsProcessing(false);
-        const doubleBookingError = 'Sorry, those dates were just booked.';
-        showToast(doubleBookingError);
-        setErrorMessage(doubleBookingError);
-        await fetchListingBookings();
-        return;
-      }
-    }
 
-    try {
       // Call Paystack inline initializer with callbacks
       initializePaystackPayment({
         onSuccess: handlePaystackSuccess,
@@ -540,6 +529,18 @@ export const BookNow: React.FC<BookNowProps> = ({
       });
     } catch (paystackError: any) {
       console.warn('Paystack popup trigger notice:', paystackError);
+      const detailedMessage = paystackError?.message || paystackError?.details || JSON.stringify(paystackError);
+
+      if (isPostgresExclusionError(paystackError)) {
+        setIsProcessing(false);
+        const doubleBookingError = 'Sorry, those dates were just booked.';
+        showToast(doubleBookingError);
+        setErrorMessage(doubleBookingError);
+        alert(doubleBookingError);
+        await fetchListingBookings();
+        return;
+      }
+
       // Fallback if public key is placeholder and user is in testing environment
       if (
         PAYSTACK_PUBLIC_KEY.includes('placeholder') ||
@@ -555,9 +556,10 @@ export const BookNow: React.FC<BookNowProps> = ({
         }, 1000);
       } else {
         setIsProcessing(false);
-        setErrorMessage(
-          'Could not open Paystack checkout. Please verify your internet connection or check your Paystack API key.'
-        );
+        const msg = `Could not open Paystack checkout: ${detailedMessage}`;
+        showToast(msg);
+        setErrorMessage(msg);
+        alert(msg);
       }
     }
   };

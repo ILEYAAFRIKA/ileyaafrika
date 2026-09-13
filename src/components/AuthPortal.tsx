@@ -143,7 +143,24 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         const supaUser = data.user;
         const uid = supaUser?.id || `user-${Date.now()}`;
 
-        // Store user document in Supabase users table
+        // Prepare profile payload for Supabase profiles table
+        const payload = {
+          id: uid,
+          email: trimmedEmail,
+          full_name: fullName.trim(),
+          role: determinedRole,
+          created_at: new Date().toISOString(),
+        };
+
+        console.log("PAYLOAD:", payload);
+
+        const { data: insertData, error: insertError } = await supabase
+          .from('profiles')
+          .insert([payload]);
+
+        if (insertError) throw insertError;
+
+        // Store user document in Supabase users table as secondary consistency
         await saveUserDocToSupabase({
           id: uid,
           uid,
@@ -252,8 +269,12 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         });
       }
     } catch (err: any) {
-      console.error('Supabase Auth error:', err);
-      setErrorMsg(getAuthErrorMessage(err));
+      console.error('Supabase Auth / Profiles error:', err);
+      const detailedMessage = err?.message || err?.details || JSON.stringify(err);
+      const friendlyMessage = getAuthErrorMessage(err);
+      const fullDisplay = `${friendlyMessage} (${detailedMessage})`;
+      setErrorMsg(fullDisplay);
+      alert(`Registration/Auth Error: ${detailedMessage}`);
     } finally {
       setIsSubmitting(false);
     }
