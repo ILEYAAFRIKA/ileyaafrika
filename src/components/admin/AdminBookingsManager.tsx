@@ -197,7 +197,7 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[#6B756F] mt-1">
-            Real-time Supabase transaction ledger, guest reservations, and Paystack settlement status.
+            Guest reservations and payment transaction status.
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#FBF6EC] text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#E8A33D]' : ''}`} />
-          <span>{isRefreshing ? 'Syncing...' : 'Refresh Records'}</span>
+          <span>{isRefreshing ? 'Refreshing...' : 'Refresh Records'}</span>
         </button>
       </div>
 
@@ -352,7 +352,7 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
           <div className="py-20 text-center space-y-3">
             <RefreshCw className="w-8 h-8 text-[#E8A33D] animate-spin mx-auto" />
             <p className="text-xs font-medium text-[#6B756F]">
-              Querying Supabase bookings table and resolving property metadata...
+              Loading reservations...
             </p>
           </div>
         ) : filteredBookings.length === 0 ? (
@@ -365,8 +365,8 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
             </h3>
             <p className="text-xs text-[#6B756F]">
               {searchTerm
-                ? 'Try searching with a different guest name, booking ID, or Paystack payment reference.'
-                : 'Guest reservations completed through Paystack checkout will automatically appear here in real-time.'}
+                ? 'Try searching with a different guest name or booking ID.'
+                : 'Guest reservations will appear here once booked.'}
             </p>
             {searchTerm && (
               <button
@@ -556,7 +556,7 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
                 </div>
                 <div>
                   <h3 className="text-base font-bold font-serif">
-                    Booking & Payment Audit Details
+                    Booking & Payment Details
                   </h3>
                   <p className="text-[10px] text-[#FBF6EC]/70 font-mono">
                     ID: {selectedBooking.id}
@@ -583,13 +583,13 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
                   </div>
                   <div>
                     <span className="text-sm font-bold block">
-                      Paystack Payment Verified & Secured
+                      Payment Verified
                     </span>
                     <span className="text-xs text-emerald-800 font-mono mt-0.5 block">
                       Reference: <strong>{selectedBooking.paymentReference || 'N/A'}</strong>
                     </span>
                     <span className="text-[11px] text-emerald-700 block mt-1">
-                      Status: <strong>{selectedBooking.paymentStatus || 'Completed'}</strong> • Funds escrowed pending physical checkout.
+                      Status: <strong>{selectedBooking.paymentStatus || 'Completed'}</strong>
                     </span>
                   </div>
                 </div>
@@ -735,7 +735,7 @@ export const AdminBookingsManager: React.FC<AdminBookingsManagerProps> = ({
                 onClick={() => setSelectedBooking(null)}
                 className="px-5 py-2.5 rounded-xl bg-[#1B4332] text-white hover:bg-[#2D6A4F] font-bold text-xs transition-colors cursor-pointer"
               >
-                Close Audit View
+                Close
               </button>
             </div>
           </div>

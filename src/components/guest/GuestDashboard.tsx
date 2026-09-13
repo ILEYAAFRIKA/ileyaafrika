@@ -551,9 +551,6 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                       <span>
                         Filtering availability for <strong>{searchCheckInDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</strong> – <strong>{searchCheckOutDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
                       </span>
-                      {isCheckingDates && (
-                        <span className="text-[10px] text-emerald-700 italic font-mono">(querying Supabase bookings...)</span>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -563,7 +560,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                       }}
                       className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
                     >
-                      Reset Dates (Show All Apartments)
+                      Reset Dates
                     </button>
                   </div>
                 )}
@@ -617,7 +614,7 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
                     </h3>
                     <p className="text-xs text-[#6B756F] leading-relaxed">
                       {approvedListings.length === 0
-                        ? 'Our quality assurance team is currently on-ground conducting physical audits of newly registered host properties. Check back shortly!'
+                        ? 'No verified apartments available at the moment. Please check back shortly.'
                         : searchCheckInDate && searchCheckOutDate
                         ? `No apartments are available for your chosen dates (${formatDateToYYYYMMDD(searchCheckInDate)} to ${formatDateToYYYYMMDD(searchCheckOutDate)}). Try adjusting your dates or resetting the date filter to see all apartments.`
                         : `We couldn't find any approved short-lets matching your filter (${selectedState}${

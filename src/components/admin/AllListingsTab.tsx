@@ -90,7 +90,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
               National Property Directory
             </h2>
             <p className="text-xs text-[#6B756F] mt-0.5">
-              Filter, oversee verification status, and toggle real-time booking availability across Nigeria.
+              Filter, oversee verification status, and manage booking availability across Nigeria.
             </p>
           </div>
 

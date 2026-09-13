@@ -910,11 +910,11 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
                     <h3 className="font-bold text-sm text-[#14231C] font-serif">Host Payment & Settlement Details</h3>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2D6A4F]/10 text-[#2D6A4F]">
                       <CheckCircle2 className="w-3 h-3" />
-                      Synced to Supabase
+                      Active
                     </span>
                   </div>
                   <p className="text-xs text-[#6B756F]">
-                    Directly synced with Master Admin database for automated guest payout remittances.
+                    Payouts for completed bookings are transferred directly to this account.
                   </p>
                 </div>
               </div>
@@ -956,7 +956,7 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
                     </div>
                     <div>
                       <h3 className="text-lg font-bold font-serif text-[#1B4332]">Edit Bank Payout Details</h3>
-                      <p className="text-xs text-[#6B756F]">Syncs directly to Supabase & Master Admin</p>
+                      <p className="text-xs text-[#6B756F]">Your account details for receiving booking payments</p>
                     </div>
                   </div>
                   <button
@@ -971,7 +971,7 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
                 {bankSaveSuccess && (
                   <div className="mb-4 p-3.5 rounded-xl bg-[#2D6A4F]/10 border border-[#2D6A4F]/30 text-[#1B4332] text-xs font-bold flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
-                    <span>Bank details saved & synced to Supabase successfully!</span>
+                    <span>Bank details saved successfully!</span>
                   </div>
                 )}
 
@@ -1049,12 +1049,12 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
                       {isSavingBank ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Saving to Supabase...</span>
+                          <span>Saving...</span>
                         </>
                       ) : (
                         <>
                           <Check className="w-3.5 h-3.5" />
-                          <span>Save & Sync Bank Details</span>
+                          <span>Save Details</span>
                         </>
                       )}
                     </button>

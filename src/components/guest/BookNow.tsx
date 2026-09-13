@@ -580,16 +580,6 @@ export const BookNow: React.FC<BookNowProps> = ({
             <span>Paystack Protected</span>
           </span>
         </div>
-
-        {/* Info Note regarding Paystack Public Key */}
-        {PAYSTACK_PUBLIC_KEY.includes('placeholder') && (
-          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] flex items-start gap-2">
-            <Info className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-            <div className="leading-tight">
-              <span><strong>Sandbox Mode:</strong> Using Paystack checkout integration. Set <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px] font-mono">VITE_PAYSTACK_PUBLIC_KEY</code> in environment for live payments.</span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Date Pickers & Nights Calculation */}
@@ -691,10 +681,10 @@ export const BookNow: React.FC<BookNowProps> = ({
           </div>
         </div>
 
-        {/* Guest Details Inputs for Paystack */}
+        {/* Guest Details Inputs */}
         <div className="pt-2 border-t border-[#1B4332]/10 space-y-3">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#14231C] block">
-            Guest Details (for Paystack Receipt)
+            Guest Details
           </span>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -767,13 +757,8 @@ export const BookNow: React.FC<BookNowProps> = ({
             </span>
           </div>
 
-          <div className="flex justify-between text-[#6B756F]">
-            <span>Physical Inspection & Verification Fee</span>
-            <span className="font-semibold text-emerald-700">₦0 (Included by Ileya Afrika)</span>
-          </div>
-
           <div className="border-t border-[#1B4332]/10 pt-2 flex justify-between items-baseline font-bold text-sm text-[#1B4332]">
-            <span>Total Amount</span>
+            <span>Total</span>
             <span className="text-xl font-extrabold font-serif text-[#1B4332]">
               ₦{totalAmount.toLocaleString()}
             </span>
@@ -785,7 +770,7 @@ export const BookNow: React.FC<BookNowProps> = ({
       <div className="space-y-3 pt-2">
         <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200/60 text-[11px] text-emerald-800 flex items-center gap-2">
           <Lock className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
-          <span>Paystack Secured: Card, Bank Transfer, USSD & Apple Pay supported.</span>
+          <span>Secured checkout: Card, bank transfer, and USSD supported.</span>
         </div>
 
         <button

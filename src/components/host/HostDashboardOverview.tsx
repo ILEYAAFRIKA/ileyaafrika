@@ -236,7 +236,7 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
           </h2>
           
           <p className="mt-2 text-white/80 text-sm leading-relaxed">
-            Manage your verified apartments, track physical inspection schedules, and ensure your NUBAN settlement details are synchronized for automatic guest booking disbursements.
+            Manage your verified apartments, track inspection schedules, and keep your bank details up to date for booking payouts.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-3">
@@ -282,11 +282,11 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
                 <h3 className="font-bold text-sm text-[#14231C] font-serif">Host Payment & Settlement Details</h3>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#2D6A4F]/10 text-[#2D6A4F]">
                   <CheckCircle2 className="w-3 h-3" />
-                  Synced to Supabase
+                  Active
                 </span>
               </div>
               <p className="text-xs text-[#6B756F]">
-                Changes saved here reflect in real-time on the Master Admin dashboard for automated payout processing.
+                Payouts for completed bookings are transferred directly to this account.
               </p>
             </div>
           </div>
@@ -328,7 +328,7 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
                 </div>
                 <div>
                   <h3 className="text-lg font-bold font-serif text-[#1B4332]">Edit Bank Payout Details</h3>
-                  <p className="text-xs text-[#6B756F]">Syncs directly to Supabase & Master Admin</p>
+                  <p className="text-xs text-[#6B756F]">Your account details for receiving booking payments</p>
                 </div>
               </div>
               <button
@@ -343,7 +343,7 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
             {bankSaveSuccess && (
               <div className="mb-4 p-3.5 rounded-xl bg-[#2D6A4F]/10 border border-[#2D6A4F]/30 text-[#1B4332] text-xs font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
-                <span>Bank details saved & synced to Supabase successfully!</span>
+                <span>Bank details saved successfully!</span>
               </div>
             )}
 
@@ -421,12 +421,12 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
                   {isSavingBank ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving to Supabase...</span>
+                      <span>Saving...</span>
                     </>
                   ) : (
                     <>
                       <Check className="w-3.5 h-3.5" />
-                      <span>Save & Sync Bank Details</span>
+                      <span>Save Details</span>
                     </>
                   )}
                 </button>
