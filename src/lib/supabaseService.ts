@@ -173,8 +173,10 @@ export async function saveListingToSupabase(listing: PropertyListing): Promise<v
       host_bank_details: listing.hostBankDetails,
       status: listing.status,
       is_physically_verified: listing.isPhysicallyVerified,
+      verification_status: listing.verification_status || listing.verificationStatus || (listing.status === 'approved' || listing.status === 'approved_live' ? 'verified' : 'pending'),
+      verification_notes: listing.verification_notes || listing.verificationNotes,
+      verification_evidence_urls: listing.verification_evidence_urls || listing.verificationEvidenceUrls || [],
       created_at: listing.createdAt,
-      verification_notes: listing.verificationNotes,
       rejection_reason: listing.rejectionReason,
     };
 
@@ -214,7 +216,12 @@ export async function updateListingInSupabase(id: string, updates: Partial<Prope
     if (updates.images !== undefined) payload.images = updates.images;
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.isPhysicallyVerified !== undefined) payload.is_physically_verified = updates.isPhysicallyVerified;
+    if (updates.verification_status !== undefined) payload.verification_status = updates.verification_status;
+    if (updates.verificationStatus !== undefined) payload.verification_status = updates.verificationStatus;
+    if (updates.verification_notes !== undefined) payload.verification_notes = updates.verification_notes;
     if (updates.verificationNotes !== undefined) payload.verification_notes = updates.verificationNotes;
+    if (updates.verification_evidence_urls !== undefined) payload.verification_evidence_urls = updates.verification_evidence_urls;
+    if (updates.verificationEvidenceUrls !== undefined) payload.verification_evidence_urls = updates.verificationEvidenceUrls;
     if (updates.rejectionReason !== undefined) payload.rejection_reason = updates.rejectionReason;
 
     const { error } = await supabase
@@ -734,8 +741,13 @@ export async function getAllListingsFromSupabase(): Promise<PropertyListing[]> {
       hostBankDetails: row.host_bank_details,
       status: row.status,
       isPhysicallyVerified: row.is_physically_verified,
+      verification_status: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+      verificationStatus: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+      verification_notes: row.verification_notes || row.verificationNotes || '',
+      verificationNotes: row.verification_notes || row.verificationNotes || '',
+      verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
+      verificationEvidenceUrls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
       createdAt: row.created_at,
-      verificationNotes: row.verification_notes,
       rejectionReason: row.rejection_reason,
     }));
   } catch (err) {
@@ -945,8 +957,13 @@ export function subscribeToListings(onUpdate: (listings: PropertyListing[]) => v
     hostBankDetails: row.host_bank_details,
     status: row.status || 'approved_live',
     isPhysicallyVerified: row.is_physically_verified ?? true,
+    verification_status: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+    verificationStatus: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+    verification_notes: row.verification_notes || row.verificationNotes || '',
+    verificationNotes: row.verification_notes || row.verificationNotes || '',
+    verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
+    verificationEvidenceUrls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
     createdAt: row.created_at || new Date().toISOString(),
-    verificationNotes: row.verification_notes,
     rejectionReason: row.rejection_reason,
   });
 
@@ -1293,4 +1310,123 @@ export async function insertReviewToSupabase(params: {
     return { data: null, error: err };
   }
 }
+
+/**
+ * Fetch all listings where verification_status === 'pending'
+ */
+export async function getPendingVerificationListingsFromSupabase(): Promise<PropertyListing[]> {
+  try {
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*')
+      .or('verification_status.eq.pending,status.eq.pending_verification,status.eq.pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Supabase getPendingVerificationListings warning:', error.message);
+      return [];
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      title: row.title || 'Verified Apartment',
+      description: row.description || '',
+      propertyType: row.property_type || 'Apartment',
+      pricePerDay: Number(row.price_per_day || row.price || 0),
+      state: row.state || 'Lagos',
+      cityArea: row.city_area || row.city || '',
+      streetAddress: row.street_address || '',
+      amenities: Array.isArray(row.amenities) ? row.amenities : [],
+      photos: Array.isArray(row.photos) && row.photos.length > 0 ? row.photos : (Array.isArray(row.images) ? row.images : []),
+      images: Array.isArray(row.images) && row.images.length > 0 ? row.images : (Array.isArray(row.photos) ? row.photos : []),
+      hostWhatsApp: row.host_whatsapp || '+2348000000000',
+      hostFullName: row.host_full_name || 'Verified Host',
+      hostEmail: row.host_email || '',
+      hostBankDetails: row.host_bank_details,
+      status: row.status || 'pending',
+      isPhysicallyVerified: row.is_physically_verified ?? false,
+      verification_status: row.verification_status || 'pending',
+      verificationStatus: row.verification_status || 'pending',
+      verification_notes: row.verification_notes || row.verificationNotes || '',
+      verificationNotes: row.verification_notes || row.verificationNotes || '',
+      verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
+      verificationEvidenceUrls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : (Array.isArray(row.verificationEvidenceUrls) ? row.verificationEvidenceUrls : []),
+      createdAt: row.created_at || new Date().toISOString(),
+      rejectionReason: row.rejection_reason,
+    }));
+  } catch (err) {
+    console.error('Supabase getPendingVerificationListings error:', err);
+    return [];
+  }
+}
+
+/**
+ * Upload multiple files to the 'verifications' storage bucket using Promise.all
+ * and retrieve their public URLs.
+ */
+export async function uploadVerificationEvidenceFiles(
+  files: File[],
+  listingId: string
+): Promise<string[]> {
+  if (!files || files.length === 0) return [];
+
+  const uploadPromises = Array.from(files).map(async (file, index) => {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const cleanFileName = `verification_${listingId}_${timestamp}_${index}_${randomStr}.${fileExt}`;
+    const filePath = `evidence/${listingId}/${cleanFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('verifications')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Failed uploading verification evidence file:', uploadError);
+      throw new Error(uploadError.message || `Evidence upload failed for ${file.name}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('verifications')
+      .getPublicUrl(filePath);
+
+    return publicUrlData.publicUrl;
+  });
+
+  return await Promise.all(uploadPromises);
+}
+
+/**
+ * Update listing record in database:
+ * - verification_status = 'verified'
+ * - verification_notes = notes
+ * - verification_evidence_urls = array of public URLs
+ * - status = 'approved_live'
+ * - is_physically_verified = true
+ */
+export async function verifyListingInSupabase(
+  listingId: string,
+  notes: string,
+  evidenceUrls: string[]
+): Promise<void> {
+  const { error } = await supabase
+    .from('listings')
+    .update({
+      verification_status: 'verified',
+      verification_notes: notes,
+      verification_evidence_urls: evidenceUrls,
+      status: 'approved_live',
+      is_physically_verified: true,
+    })
+    .eq('id', listingId);
+
+  if (error) {
+    console.error('Supabase update listing verification error:', error);
+    throw new Error(error.message || 'Failed to update listing verification status');
+  }
+}
+
 

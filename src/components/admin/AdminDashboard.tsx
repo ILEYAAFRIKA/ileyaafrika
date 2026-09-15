@@ -20,7 +20,7 @@ interface AdminDashboardProps {
   adminEmails: string[];
   masterAdminEmail?: string;
   onLogout: () => void;
-  onApproveListing: (id: string, inspectionNotes?: string) => void;
+  onApproveListing: (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => void;
   onRejectListing: (id: string, reason: string) => void;
   onToggleBookingStatus: (id: string) => void;
   onDeleteListing: (id: string) => void;
@@ -63,7 +63,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // If a non-master admin somehow lands on 'admin-team', reset to pending-verifications
   const safeActiveTab = (!isMasterAdmin && activeTab === 'admin-team') ? 'pending-verifications' : activeTab;
 
-  const pendingListings = listings.filter((l) => l.status === 'pending_verification' || l.status === 'pending');
+  const pendingListings = listings.filter(
+    (l) =>
+      l.verification_status === 'pending' ||
+      l.verificationStatus === 'pending' ||
+      (!l.verification_status && (l.status === 'pending_verification' || l.status === 'pending'))
+  );
 
   return (
     <div className="min-h-screen bg-[#FBF6EC] text-[#14231C] flex flex-col">

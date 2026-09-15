@@ -73,8 +73,13 @@ export interface PropertyListing {
   hostBankDetails?: BankPayoutDetails;
   status: ListingStatus;
   isPhysicallyVerified?: boolean;
-  createdAt: string;
+  verification_status?: 'pending' | 'verified' | 'rejected' | string;
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | string;
+  verification_notes?: string;
   verificationNotes?: string;
+  verification_evidence_urls?: string[];
+  verificationEvidenceUrls?: string[];
+  createdAt: string;
   rejectionReason?: string;
 }
 

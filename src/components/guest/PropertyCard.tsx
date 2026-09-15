@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ShieldCheck,
   MapPin,
@@ -12,6 +12,7 @@ import {
   Waves
 } from 'lucide-react';
 import { PropertyListing } from '../../types';
+import { VerificationEvidenceModal } from '../common/VerificationEvidenceModal';
 
 interface PropertyCardProps {
   listing: PropertyListing;
@@ -22,6 +23,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   listing,
   onSelectAndBook,
 }) => {
+  const [showEvidenceModal, setShowEvidenceModal] = useState<boolean>(false);
+
   if (!listing) return null;
 
   const mainPhoto =
@@ -39,101 +42,128 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   const propertyType = listing.propertyType || 'Entire Apartment';
   const amenities = Array.isArray(listing.amenities) ? listing.amenities : [];
 
+  const isVerified =
+    listing.verification_status === 'verified' ||
+    listing.verificationStatus === 'verified' ||
+    (listing.isPhysicallyVerified && (!listing.verification_status || listing.verification_status === 'verified'));
+
   return (
-    <div className="bg-white rounded-2xl border border-[#1B4332]/10 overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 flex flex-col group">
-      {/* Property Image Container */}
-      <div className="relative aspect-4/3 w-full bg-[#14231C] overflow-hidden">
-        <img
-          src={mainPhoto}
-          alt={title}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+    <>
+      <div className="bg-white rounded-2xl border border-[#1B4332]/10 overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 flex flex-col group">
+        {/* Property Image Container */}
+        <div className="relative aspect-4/3 w-full bg-[#14231C] overflow-hidden">
+          <img
+            src={mainPhoto}
+            alt={title}
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
 
-        {/* Physical Verification Badge */}
-        <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#1B4332]/95 backdrop-blur-xs text-[#E8A33D] text-[11px] font-bold flex items-center gap-1.5 shadow-md border border-[#E8A33D]/30">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D]" />
-          <span>Physically Verified by Ileya Afrika</span>
-        </div>
+          {/* Physical Verification Badge */}
+          {isVerified && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEvidenceModal(true);
+              }}
+              title="Click to view verified inspection evidence"
+              className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#1B4332]/95 hover:bg-[#143427] backdrop-blur-xs text-[#E8A33D] text-[11px] font-bold flex items-center gap-1.5 shadow-md border border-[#E8A33D]/30 cursor-pointer transition-all hover:scale-105"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D]" />
+              <span>Verified by Ileya Afrika</span>
+            </button>
+          )}
 
-        {/* Live Booking Badge */}
-        <div className="absolute top-3 right-3">
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 backdrop-blur-xs bg-emerald-600/95 text-white border border-emerald-400/40">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span>Book by Date</span>
-          </span>
-        </div>
-
-        {/* Property Type Floating Pill */}
-        <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium">
-          {propertyType}
-        </div>
-      </div>
-
-      {/* Property Details Body */}
-      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-        <div className="space-y-2">
-          {/* Location Line */}
-          <div className="flex items-center gap-1 text-xs font-semibold text-[#2D6A4F]">
-            <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2D6A4F]" />
-            <span className="truncate">
-              {cityArea}, {state} State
+          {/* Live Booking Badge */}
+          <div className="absolute top-3 right-3">
+            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1.5 backdrop-blur-xs bg-emerald-600/95 text-white border border-emerald-400/40">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              <span>Book by Date</span>
             </span>
           </div>
 
-          {/* Title */}
-          <h3 className="text-base font-bold font-serif text-[#14231C] line-clamp-1 group-hover:text-[#1B4332] transition-colors">
-            {title}
-          </h3>
-
-          {/* Brief Snippet */}
-          <p className="text-xs text-[#6B756F] line-clamp-2 leading-relaxed">
-            {description}
-          </p>
-
-          {/* Key Amenities Preview */}
-          {amenities.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {amenities.slice(0, 3).map((amenity, i) => (
-                <span
-                  key={i}
-                  className="px-2 py-0.5 rounded-md bg-[#FBF6EC] border border-[#1B4332]/10 text-[10px] font-medium text-[#1B4332]"
-                >
-                  {amenity}
-                </span>
-              ))}
-              {amenities.length > 3 && (
-                <span className="text-[10px] text-[#6B756F] self-center">
-                  +{amenities.length - 3} more
-                </span>
-              )}
-            </div>
-          )}
+          {/* Property Type Floating Pill */}
+          <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium">
+            {propertyType}
+          </div>
         </div>
 
-        {/* Footer: Price & CTA */}
-        <div className="pt-3 border-t border-[#1B4332]/10 flex items-center justify-between gap-3">
-          <div>
-            <span className="text-xs text-[#6B756F] block">Daily Rate</span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg font-bold font-serif text-[#1B4332]">
-                ₦{price.toLocaleString()}
+        {/* Property Details Body */}
+        <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+          <div className="space-y-2">
+            {/* Location Line */}
+            <div className="flex items-center gap-1 text-xs font-semibold text-[#2D6A4F]">
+              <MapPin className="w-3.5 h-3.5 shrink-0 text-[#2D6A4F]" />
+              <span className="truncate">
+                {cityArea}, {state} State
               </span>
-              <span className="text-[11px] text-[#6B756F]">/ day</span>
             </div>
+
+            {/* Title */}
+            <h3 className="text-base font-bold font-serif text-[#14231C] line-clamp-1 group-hover:text-[#1B4332] transition-colors">
+              {title}
+            </h3>
+
+            {/* Brief Snippet */}
+            <p className="text-xs text-[#6B756F] line-clamp-2 leading-relaxed">
+              {description}
+            </p>
+
+            {/* Key Amenities Preview */}
+            {amenities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {amenities.slice(0, 3).map((amenity, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-0.5 rounded-md bg-[#FBF6EC] border border-[#1B4332]/10 text-[10px] font-medium text-[#1B4332]"
+                  >
+                    {amenity}
+                  </span>
+                ))}
+                {amenities.length > 3 && (
+                  <span className="text-[10px] text-[#6B756F] self-center">
+                    +{amenities.length - 3} more
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => onSelectAndBook(listing)}
-            id={`select-book-${listing.id || 'default'}`}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-[#E8A33D] hover:bg-[#d99530] text-[#14231C] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <span>Select & Book</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {/* Footer: Price & CTA */}
+          <div className="pt-3 border-t border-[#1B4332]/10 flex items-center justify-between gap-3">
+            <div>
+              <span className="text-xs text-[#6B756F] block">Daily Rate</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg font-bold font-serif text-[#1B4332]">
+                  ₦{price.toLocaleString()}
+                </span>
+                <span className="text-[11px] text-[#6B756F]">/ day</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onSelectAndBook(listing)}
+              id={`select-book-${listing.id || 'default'}`}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#E8A33D] hover:bg-[#d99530] text-[#14231C] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>Select & Book</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Verification Evidence Modal Preview */}
+      <VerificationEvidenceModal
+        isOpen={showEvidenceModal}
+        onClose={() => setShowEvidenceModal(false)}
+        verification_evidence_urls={listing.verification_evidence_urls || listing.verificationEvidenceUrls || []}
+        verification_notes={listing.verification_notes || listing.verificationNotes}
+        propertyTitle={listing.title}
+        propertyLocation={`${listing.cityArea}, ${listing.state}`}
+      />
+    </>
   );
 };

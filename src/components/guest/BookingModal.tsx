@@ -15,6 +15,7 @@ import {
 import { PropertyListing, GuestBooking, Review } from '../../types';
 import { BookNow } from './BookNow';
 import { getReviewsForListing } from '../../lib/supabaseService';
+import { VerificationEvidenceModal } from '../common/VerificationEvidenceModal';
 
 interface BookingModalProps {
   listing: PropertyListing;
@@ -47,6 +48,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(0);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(true);
+  const [showEvidenceModal, setShowEvidenceModal] = useState<boolean>(false);
+
+  const isVerified =
+    listing.verification_status === 'verified' ||
+    listing.verificationStatus === 'verified' ||
+    (listing.isPhysicallyVerified && (!listing.verification_status || listing.verification_status === 'verified'));
 
   // Fetch all records from the reviews table matching the current listing_id
   useEffect(() => {
@@ -169,10 +176,29 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
               {/* Title & Verified Address */}
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#1B4332]">
-                    {listing.title}
-                  </h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#1B4332]">
+                      {listing.title}
+                    </h2>
+
+                    {/* Interactive "Verified by Ileya Afrika" Badge Button (Prompt Requirement #2) */}
+                    {isVerified && (
+                      <button
+                        type="button"
+                        id="verified-badge-details-btn"
+                        onClick={() => setShowEvidenceModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1B4332] hover:bg-[#143427] text-[#E8A33D] text-xs font-bold transition-all shadow-xs cursor-pointer border border-[#E8A33D]/40 group"
+                        title="Click to view on-site physical verification evidence photos"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D] group-hover:scale-110 transition-transform" />
+                        <span>Verified by Ileya Afrika</span>
+                        <span className="text-[10px] text-white/80 font-normal underline ml-0.5">
+                          View Photos
+                        </span>
+                      </button>
+                    )}
+                  </div>
 
                   {/* Rating Badge Display near listing title */}
                   {totalReviewCount > 0 && averageRating !== null ? (
@@ -400,6 +426,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Verification Evidence Modal (Prompt Requirement #2 & #3) */}
+      <VerificationEvidenceModal
+        isOpen={showEvidenceModal}
+        onClose={() => setShowEvidenceModal(false)}
+        verification_evidence_urls={listing.verification_evidence_urls || listing.verificationEvidenceUrls || []}
+        verification_notes={listing.verification_notes || listing.verificationNotes}
+        propertyTitle={listing.title}
+        propertyLocation={`${listing.cityArea}, ${listing.state}`}
+      />
     </div>
   );
 };

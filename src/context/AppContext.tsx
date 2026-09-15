@@ -55,7 +55,7 @@ interface AppContextType {
   setListings: React.Dispatch<React.SetStateAction<PropertyListing[]>>;
   addListing: (newListing: PropertyListing) => void;
   updateListing: (id: string, updates: Partial<PropertyListing>) => void;
-  approveListing: (id: string, inspectionNotes?: string) => void;
+  approveListing: (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => void;
   rejectListing: (id: string, reason: string) => void;
   deleteListing: (id: string) => void;
   toggleBookingStatus: (id: string) => void;
@@ -489,11 +489,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateListingInSupabase(id, updates);
   };
 
-  const approveListing = (id: string, inspectionNotes?: string) => {
+  const approveListing = (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => {
     const updates: Partial<PropertyListing> = {
-      status: 'approved',
+      status: 'approved_live',
       isPhysicallyVerified: true,
-      verificationNotes: inspectionNotes || 'Passed physical inspection for power, water, and security.'
+      verification_status: 'verified',
+      verificationStatus: 'verified',
+      verification_notes: inspectionNotes || 'Passed physical inspection for power, water, and security.',
+      verificationNotes: inspectionNotes || 'Passed physical inspection for power, water, and security.',
+      verification_evidence_urls: evidenceUrls || [],
+      verificationEvidenceUrls: evidenceUrls || [],
     };
 
     setListingsState((prev) =>
