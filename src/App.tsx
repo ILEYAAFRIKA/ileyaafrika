@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AppProvider, useApp, MASTER_ADMIN_EMAIL } from './context/AppContext';
 import { AuthPortal } from './components/AuthPortal';
+import { ForgotPassword } from './components/auth/ForgotPassword';
+import { UpdatePassword } from './components/auth/UpdatePassword';
 import { HostHeader } from './components/host/HostHeader';
 import { HostDashboardOverview } from './components/host/HostDashboardOverview';
 import { ListingCreationForm } from './components/host/ListingCreationForm';
@@ -19,11 +21,14 @@ import {
   ShieldCheck,
   Building2,
   Loader2,
+  CheckCircle2
 } from 'lucide-react';
 
 function normalizeRoute(path: string): string {
   if (!path || path === '/' || path === '') return '/login';
   if (path === '/login' || path === '/auth') return '/login';
+  if (path === '/forgot-password' || path === '/reset-password') return '/forgot-password';
+  if (path === '/update-password') return '/update-password';
   if (path === '/guest' || path === '/guest-dashboard') return '/guest-dashboard';
   if (path === '/host' || path === '/host-dashboard') return '/host-dashboard';
   if (path === '/admin' || path === '/admin-dashboard') return '/admin-dashboard';
@@ -65,6 +70,7 @@ function MainApp() {
   const [currentRoute, setCurrentRoute] = useState<string>(() => {
     return normalizeRoute(window.location.pathname);
   });
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const [hostActiveTab, setHostActiveTab] = useState<HostViewTab>(() => {
     const path = window.location.pathname;
@@ -101,15 +107,21 @@ function MainApp() {
 
   const isAuthenticated = !!(currentUser && currentUser.isAuthenticated);
 
+  const isPublicAuthRoute =
+    currentRoute === '/login' ||
+    currentRoute === '/auth' ||
+    currentRoute === '/forgot-password' ||
+    currentRoute === '/update-password';
+
   // 1. Strict Authentication Guard & 2. Role-Based Redirection Effect
   useEffect(() => {
     if (loading) return;
 
     if (!isAuthenticated) {
       // 1. Strict Authentication Guard:
-      // If no active session exists, user MUST be redirected to /login.
-      // Unauthenticated users should never see the Guest or Host dashboards.
-      if (currentRoute !== '/login') {
+      // Allow access to public auth routes: /login, /forgot-password, /update-password.
+      // If unauthenticated user tries to access protected dashboards, redirect to /login.
+      if (!isPublicAuthRoute) {
         setCurrentRoute('/login');
         try {
           window.history.replaceState({}, '', '/login');
@@ -121,11 +133,12 @@ function MainApp() {
       // 2. Role-Based Redirection:
       // If user is already logged in, evaluate their account type/role.
       // Automatically redirect to their respective dashboard so they don't have to log in again.
+      // Allow /update-password so user can complete password update flow.
       const targetDashboard = getDashboardForRole(currentUser?.role);
 
-      if (currentRoute === '/login' || currentRoute === '/auth' || currentRoute === '/') {
+      if (currentRoute === '/login' || currentRoute === '/auth' || currentRoute === '/' || currentRoute === '/forgot-password') {
         navigateTo(targetDashboard);
-      } else {
+      } else if (currentRoute !== '/update-password') {
         // Enforce role-based access boundaries
         const role = currentUser?.role;
         const isGuest = role === 'guest';
@@ -225,6 +238,28 @@ function MainApp() {
   }
 
   // -------------------------------------------------------------
+  // Public Authentication & Password Reset Routes
+  // -------------------------------------------------------------
+
+  // View: Forgot Password (/forgot-password)
+  if (currentRoute === '/forgot-password') {
+    return <ForgotPassword onNavigate={navigateTo} />;
+  }
+
+  // View: Update Password (/update-password)
+  if (currentRoute === '/update-password') {
+    return (
+      <UpdatePassword
+        onNavigate={navigateTo}
+        onSuccessToast={(msg) => {
+          setToastMsg(msg);
+          setTimeout(() => setToastMsg(null), 6000);
+        }}
+      />
+    );
+  }
+
+  // -------------------------------------------------------------
   // 1. Strict Authentication Guard:
   // If unauthenticated or on login route, ALWAYS render the AuthPortal.
   // Unauthenticated users CANNOT see Guest, Host, or Admin dashboards.
@@ -236,6 +271,7 @@ function MainApp() {
         currentPath="/login"
         onNavigate={navigateTo}
         adminEmails={adminEmails}
+        initialSuccessMsg={toastMsg}
       />
     );
   }
