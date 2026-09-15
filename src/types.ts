@@ -66,6 +66,7 @@ export interface PropertyListing {
   amenities: string[];
   photos: string[];
   images?: string[]; // Alias for photos compatibility
+  image_url?: string; // Direct image URL alias for single-image mappings
   hostWhatsApp: string;
   hostFullName?: string;
   hostEmail?: string;
@@ -107,6 +108,25 @@ export interface GuestBooking {
   status: 'confirmed' | 'completed' | 'cancelled';
   paymentStatus?: 'completed' | 'pending' | 'failed' | string;
   paymentReference?: string;
+  // Foreign key joined listing relationship
+  listings?: {
+    id?: string;
+    title?: string;
+    image_url?: string;
+    photos?: string[];
+    images?: string[];
+    property_type?: string;
+    state?: string;
+    city_area?: string;
+    city?: string;
+    street_address?: string;
+    price?: number;
+    price_per_day?: number;
+    host_full_name?: string;
+    host_whatsapp?: string;
+    host_email?: string;
+    [key: string]: any;
+  } | null;
 }
 
 export interface Review {

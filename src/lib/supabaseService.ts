@@ -429,6 +429,83 @@ export function formatDateToYYYYMMDD(date: Date): string {
 }
 
 /**
+ * Map a raw booking row from Supabase (with joined listings table data)
+ * to our strongly typed GuestBooking interface.
+ */
+export function mapBookingWithListing(row: any): GuestBooking {
+  const listingObj = Array.isArray(row.listings) ? row.listings[0] : row.listings;
+  
+  // Extract images array safely from either photos or images columns
+  const rawPhotos = Array.isArray(listingObj?.photos)
+    ? listingObj.photos
+    : Array.isArray(listingObj?.images)
+    ? listingObj.images
+    : [];
+
+  // Primary image URL resolution: image_url -> photos[0] -> images[0] -> snapshot photo
+  const resolvedImageUrl =
+    listingObj?.image_url ||
+    rawPhotos[0] ||
+    (typeof listingObj?.images === 'string' ? listingObj.images : '') ||
+    row.listing_photo ||
+    '';
+
+  const normalizedListings = listingObj
+    ? {
+        ...listingObj,
+        image_url: resolvedImageUrl,
+        title: listingObj.title || row.listing_title || 'Verified Property',
+        photos: rawPhotos.length > 0 ? rawPhotos : (resolvedImageUrl ? [resolvedImageUrl] : []),
+        images: rawPhotos.length > 0 ? rawPhotos : (resolvedImageUrl ? [resolvedImageUrl] : []),
+        property_type: listingObj.property_type || row.property_type || 'Apartment',
+        state: listingObj.state || row.state || 'Nigeria',
+        city_area: listingObj.city_area || listingObj.city || row.city_area || '',
+        city: listingObj.city || listingObj.city_area || row.city_area || '',
+        street_address: listingObj.street_address || row.street_address || '',
+        price_per_day: Number(listingObj.price_per_day || listingObj.price || 0),
+        host_full_name: listingObj.host_full_name || row.host_full_name || '',
+        host_whatsapp: listingObj.host_whatsapp || row.host_whatsapp || '',
+        host_email: listingObj.host_email || row.host_email || '',
+      }
+    : (resolvedImageUrl || row.listing_title
+        ? {
+            image_url: resolvedImageUrl,
+            title: row.listing_title || 'Verified Property',
+            photos: resolvedImageUrl ? [resolvedImageUrl] : [],
+            images: resolvedImageUrl ? [resolvedImageUrl] : [],
+          }
+        : null);
+
+  return {
+    id: row.id,
+    listingId: row.listing_id,
+    listingTitle: listingObj?.title || row.listing_title || 'Verified Property',
+    listingPhoto: resolvedImageUrl,
+    propertyType: listingObj?.property_type || row.property_type || 'Apartment',
+    state: listingObj?.state || row.state || 'Nigeria',
+    cityArea: listingObj?.city_area || listingObj?.city || row.city_area || '',
+    streetAddress: listingObj?.street_address || row.street_address || '',
+    hostFullName: listingObj?.host_full_name || row.host_full_name || '',
+    hostWhatsApp: listingObj?.host_whatsapp || row.host_whatsapp || '',
+    hostEmail: listingObj?.host_email || row.host_email || '',
+    guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
+    guestEmail: row.guest_email || '',
+    guestPhone: row.guest_phone || '',
+    checkInDate: row.check_in_date,
+    checkOutDate: row.check_out_date,
+    guestsCount: row.guests_count || 1,
+    totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
+    totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
+    nights: Number(row.nights || 1),
+    bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
+    status: row.status || 'confirmed',
+    paymentStatus: row.payment_status || 'completed',
+    paymentReference: row.payment_reference || '',
+    listings: normalizedListings,
+  };
+}
+
+/**
  * Fetch all completed bookings for a specific listing from Supabase
  * Specifically filters where payment_status = 'completed'
  */
@@ -436,7 +513,7 @@ export async function getCompletedBookingsForListing(listingId: string): Promise
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select('*, listings(*)')
       .eq('listing_id', listingId)
       .eq('payment_status', 'completed');
 
@@ -445,7 +522,7 @@ export async function getCompletedBookingsForListing(listingId: string): Promise
       // Fallback: fetch without status filter if payment_status column has mixed casing
       const { data: fallbackData } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, listings(*)')
         .eq('listing_id', listingId);
 
       const filtered = (fallbackData || []).filter(
@@ -454,60 +531,10 @@ export async function getCompletedBookingsForListing(listingId: string): Promise
           String(row.status || '').toLowerCase() === 'confirmed'
       );
 
-      return filtered.map((row: any) => ({
-        id: row.id,
-        listingId: row.listing_id,
-        listingTitle: row.listing_title,
-        listingPhoto: row.listing_photo,
-        propertyType: row.property_type,
-        state: row.state,
-        cityArea: row.city_area,
-        streetAddress: row.street_address,
-        hostFullName: row.host_full_name,
-        hostWhatsApp: row.host_whatsapp,
-        hostEmail: row.host_email,
-        guestFullName: row.guest_full_name,
-        guestEmail: row.guest_email,
-        guestPhone: row.guest_phone,
-        checkInDate: row.check_in_date,
-        checkOutDate: row.check_out_date,
-        guestsCount: row.guests_count,
-        totalPrice: row.total_price || row.total_amount || 0,
-        totalAmount: row.total_amount || row.total_price || 0,
-        nights: row.nights,
-        bookedAt: row.booked_at,
-        status: row.status,
-        paymentStatus: row.payment_status || 'completed',
-        paymentReference: row.payment_reference || '',
-      }));
+      return filtered.map(mapBookingWithListing);
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      listingId: row.listing_id,
-      listingTitle: row.listing_title,
-      listingPhoto: row.listing_photo,
-      propertyType: row.property_type,
-      state: row.state,
-      cityArea: row.city_area,
-      streetAddress: row.street_address,
-      hostFullName: row.host_full_name,
-      hostWhatsApp: row.host_whatsapp,
-      hostEmail: row.host_email,
-      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
-      guestEmail: row.guest_email || '',
-      guestPhone: row.guest_phone || '',
-      checkInDate: row.check_in_date,
-      checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count || 1,
-      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
-      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
-      nights: Number(row.nights || 1),
-      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
-      status: row.status || 'confirmed',
-      paymentStatus: row.payment_status || 'completed',
-      paymentReference: row.payment_reference || '',
-    }));
+    return (data || []).map(mapBookingWithListing);
   } catch (err) {
     console.error('Supabase getCompletedBookingsForListing error:', err);
     return [];
@@ -635,7 +662,7 @@ export async function getBookingsForListing(listingId: string): Promise<GuestBoo
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select('*, listings(*)')
       .eq('listing_id', listingId);
 
     if (error) {
@@ -643,32 +670,7 @@ export async function getBookingsForListing(listingId: string): Promise<GuestBoo
       return [];
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      listingId: row.listing_id,
-      listingTitle: row.listing_title,
-      listingPhoto: row.listing_photo,
-      propertyType: row.property_type,
-      state: row.state,
-      cityArea: row.city_area,
-      streetAddress: row.street_address,
-      hostFullName: row.host_full_name,
-      hostWhatsApp: row.host_whatsapp,
-      hostEmail: row.host_email,
-      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
-      guestEmail: row.guest_email || '',
-      guestPhone: row.guest_phone || '',
-      checkInDate: row.check_in_date,
-      checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count || 1,
-      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
-      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
-      nights: Number(row.nights || 1),
-      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
-      status: row.status || 'confirmed',
-      paymentStatus: row.payment_status || 'completed',
-      paymentReference: row.payment_reference || '',
-    }));
+    return (data || []).map(mapBookingWithListing);
   } catch (err) {
     console.error('Supabase getBookings error:', err);
     return [];
@@ -677,13 +679,14 @@ export async function getBookingsForListing(listingId: string): Promise<GuestBoo
 
 
 /**
- * Fetch all bookings across all listings from Supabase (for Admin)
+ * Fetch all bookings across all listings from Supabase (for Admin & Dashboards)
+ * Performs a foreign key join on listings table to hydrate listing details and photos
  */
 export async function getAllBookingsFromSupabase(): Promise<GuestBooking[]> {
   try {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select('*, listings(*)')
       .order('booked_at', { ascending: false });
 
     if (error) {
@@ -691,32 +694,7 @@ export async function getAllBookingsFromSupabase(): Promise<GuestBooking[]> {
       return [];
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      listingId: row.listing_id,
-      listingTitle: row.listing_title,
-      listingPhoto: row.listing_photo,
-      propertyType: row.property_type,
-      state: row.state,
-      cityArea: row.city_area,
-      streetAddress: row.street_address,
-      hostFullName: row.host_full_name,
-      hostWhatsApp: row.host_whatsapp,
-      hostEmail: row.host_email,
-      guestFullName: row.guest_name || row.guest_full_name || 'Valued Guest',
-      guestEmail: row.guest_email || '',
-      guestPhone: row.guest_phone || '',
-      checkInDate: row.check_in_date,
-      checkOutDate: row.check_out_date,
-      guestsCount: row.guests_count || 1,
-      totalPrice: Number(row.amount_paid || row.total_price || row.total_amount || 0),
-      totalAmount: Number(row.amount_paid || row.total_amount || row.total_price || 0),
-      nights: Number(row.nights || 1),
-      bookedAt: row.booked_at || row.created_at || new Date().toISOString(),
-      status: row.status || 'confirmed',
-      paymentStatus: row.payment_status || 'completed',
-      paymentReference: row.payment_reference || '',
-    }));
+    return (data || []).map(mapBookingWithListing);
   } catch (err) {
     console.error('Supabase getAllBookings error:', err);
     return [];
@@ -1026,42 +1004,15 @@ export function subscribeToListings(onUpdate: (listings: PropertyListing[]) => v
  * Subscribe to Real-Time Bookings from Supabase
  */
 export function subscribeToBookings(onUpdate: (bookings: GuestBooking[]) => void): () => void {
-  const mapBookingRow = (row: any): GuestBooking => ({
-    id: row.id,
-    listingId: row.listing_id,
-    listingTitle: row.listing_title,
-    listingPhoto: row.listing_photo,
-    propertyType: row.property_type,
-    state: row.state,
-    cityArea: row.city_area,
-    streetAddress: row.street_address,
-    hostFullName: row.host_full_name,
-    hostWhatsApp: row.host_whatsapp,
-    hostEmail: row.host_email,
-    guestFullName: row.guest_full_name,
-    guestEmail: row.guest_email,
-    guestPhone: row.guest_phone,
-    checkInDate: row.check_in_date,
-    checkOutDate: row.check_out_date,
-    guestsCount: row.guests_count,
-    totalPrice: Number(row.total_price || row.total_amount || 0),
-    totalAmount: Number(row.total_amount || row.total_price || 0),
-    nights: Number(row.nights || 1),
-    bookedAt: row.booked_at,
-    status: row.status || 'confirmed',
-    paymentStatus: row.payment_status || 'completed',
-    paymentReference: row.payment_reference || '',
-  });
-
-  // Initial fetch
+  // Initial fetch with listings foreign key join
   supabase
     .from('bookings')
-    .select('*')
+    .select('*, listings(*)')
     .order('booked_at', { ascending: false })
     .then(
       ({ data, error }) => {
         if (!error && data && data.length > 0) {
-          onUpdate(data.map(mapBookingRow));
+          onUpdate(data.map(mapBookingWithListing));
         }
       },
       (err) => console.warn('Initial bookings fetch notice:', err)
@@ -1075,12 +1026,12 @@ export function subscribeToBookings(onUpdate: (bookings: GuestBooking[]) => void
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
         supabase
           .from('bookings')
-          .select('*')
+          .select('*, listings(*)')
           .order('booked_at', { ascending: false })
           .then(
             ({ data, error }) => {
               if (!error && data) {
-                onUpdate(data.map(mapBookingRow));
+                onUpdate(data.map(mapBookingWithListing));
               }
             },
             (err) => console.warn('Bookings refresh notice:', err)

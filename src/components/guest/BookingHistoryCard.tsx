@@ -40,20 +40,46 @@ export const BookingHistoryCard: React.FC<BookingHistoryCardProps> = ({
     `Hello Ileya Afrika Concierge, I need assistance regarding my reservation for "${booking.listingTitle}" (#ILE-${booking.id.slice(0, 6)}).`
   )}`;
 
-  const photo =
+  const [imageError, setImageError] = React.useState<boolean>(false);
+
+  // Map to joined listings data first (e.g. booking.listings?.image_url) as requested
+  const rawImageUrl =
+    booking.listings?.image_url ||
+    booking.listings?.photos?.[0] ||
+    booking.listings?.images?.[0] ||
     booking.listingPhoto ||
+    '';
+
+  const defaultPlaceholder =
     'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80';
+
+  const displayImageUrl = !imageError && (rawImageUrl || defaultPlaceholder);
 
   return (
     <div className="bg-white rounded-2xl border border-[#1B4332]/10 overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 flex flex-col md:flex-row">
       {/* Image thumbnail on left for desktop */}
-      <div className="relative md:w-72 h-48 md:h-auto shrink-0 bg-[#14231C] overflow-hidden">
-        <img
-          src={photo}
-          alt={booking.listingTitle}
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover"
-        />
+      <div className="relative md:w-72 h-48 md:h-auto shrink-0 bg-[#EFECE6] overflow-hidden flex items-center justify-center">
+        {displayImageUrl ? (
+          <img
+            src={displayImageUrl}
+            alt={booking.listings?.title || booking.listingTitle || 'Verified Apartment'}
+            referrerPolicy="no-referrer"
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover transition-opacity duration-300"
+          />
+        ) : (
+          <div className="w-full h-full min-h-[190px] flex flex-col items-center justify-center p-4 bg-gradient-to-br from-[#EFECE6] to-[#E2DDD5] text-[#6B756F]">
+            <div className="w-12 h-12 rounded-2xl bg-[#1B4332]/10 flex items-center justify-center text-[#1B4332] mb-2">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <span className="text-xs font-bold text-[#14231C] text-center line-clamp-1">
+              {booking.listings?.title || booking.listingTitle || 'Verified Property'}
+            </span>
+            <span className="text-[10px] text-[#6B756F] mt-0.5">
+              {booking.listings?.property_type || booking.propertyType || 'Apartment'}
+            </span>
+          </div>
+        )}
 
         {/* Verification badge */}
         <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#1B4332]/90 backdrop-blur-xs text-[#E8A33D] text-[10px] font-bold flex items-center gap-1 shadow-sm border border-[#E8A33D]/30">
@@ -75,7 +101,7 @@ export const BookingHistoryCard: React.FC<BookingHistoryCardProps> = ({
         </div>
 
         <div className="absolute bottom-3 left-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px]">
-          {booking.propertyType || 'Apartment'}
+          {booking.listings?.property_type || booking.propertyType || 'Apartment'}
         </div>
       </div>
 

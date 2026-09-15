@@ -17,11 +17,20 @@ import {
   Edit3,
   Check,
   Loader2,
-  Sparkles
+  Sparkles,
+  Calendar,
+  Users,
+  DollarSign
 } from 'lucide-react';
-import { PropertyListing, ListingStatus, UserSession, BankPayoutDetails } from '../../types';
+import { PropertyListing, ListingStatus, UserSession, BankPayoutDetails, GuestBooking } from '../../types';
 import { supabase } from '../../lib/supabase';
-import { getUserFromSupabase, savePayoutDetailsToSupabase, getPayoutDetailsFromSupabase } from '../../lib/supabaseService';
+import {
+  getUserFromSupabase,
+  savePayoutDetailsToSupabase,
+  getPayoutDetailsFromSupabase,
+  getAllBookingsFromSupabase,
+  subscribeToBookings,
+} from '../../lib/supabaseService';
 import { NIGERIAN_BANKS, INITIAL_BANK_SETTINGS } from '../../data/nigerianData';
 
 interface HostDashboardOverviewProps {
@@ -67,6 +76,11 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
   const [isSavingBank, setIsSavingBank] = useState(false);
   const [bankSaveSuccess, setBankSaveSuccess] = useState(false);
   const [bankErrorMsg, setBankErrorMsg] = useState<string | null>(null);
+
+  // Host Bookings & Reservations state
+  const [hostBookings, setHostBookings] = useState<GuestBooking[]>([]);
+  const [isLoadingBookings, setIsLoadingBookings] = useState<boolean>(true);
+  const [activeReservationTab, setActiveReservationTab] = useState<'upcoming' | 'past'>('upcoming');
 
   // Fetch host's actual name and payout details directly from Supabase on mount/session change
   useEffect(() => {
@@ -133,6 +147,37 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
 
     fetchHostData();
   }, [session]);
+
+  // Fetch host apartment bookings from Supabase with joined listings data
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadBookings = async () => {
+      try {
+        const data = await getAllBookingsFromSupabase();
+        if (isMounted && data) {
+          setHostBookings(data);
+        }
+      } catch (err) {
+        console.warn('Could not load host bookings from Supabase:', err);
+      } finally {
+        if (isMounted) setIsLoadingBookings(false);
+      }
+    };
+
+    loadBookings();
+
+    const unsubscribe = subscribeToBookings((data) => {
+      if (isMounted && data) {
+        setHostBookings(data);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Sync when initialBankDetails changes
   useEffect(() => {
@@ -239,6 +284,39 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
     }
     return listing.status === filterStatus;
   });
+
+  // Host bookings computation with joined listings data
+  const hostListingIds = React.useMemo(() => new Set(listings.map((l) => l.id)), [listings]);
+  const myApartmentBookings = React.useMemo(() => {
+    const hostEmail = (session?.email || '').toLowerCase().trim();
+    return hostBookings.filter(
+      (b) =>
+        hostListingIds.has(b.listingId) ||
+        (hostEmail && b.hostEmail && b.hostEmail.toLowerCase().trim() === hostEmail)
+    );
+  }, [hostBookings, hostListingIds, session]);
+
+  const todayMidnight = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const upcomingBookings = React.useMemo(() => {
+    return myApartmentBookings.filter((b) => {
+      if (!b.checkOutDate) return true;
+      const co = new Date(b.checkOutDate);
+      return co >= todayMidnight;
+    });
+  }, [myApartmentBookings, todayMidnight]);
+
+  const pastBookings = React.useMemo(() => {
+    return myApartmentBookings.filter((b) => {
+      if (!b.checkOutDate) return false;
+      const co = new Date(b.checkOutDate);
+      return co < todayMidnight;
+    });
+  }, [myApartmentBookings, todayMidnight]);
 
   return (
     <div className="space-y-8">
@@ -615,9 +693,12 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
                   {/* Photo with Status Badge overlay */}
                   <div className="relative aspect-video w-full bg-[#1B4332]/5 overflow-hidden">
                     <img
-                      src={listing.photos?.[0] || listing.images?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80'}
+                      src={listing.image_url || listing.photos?.[0] || listing.images?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80'}
                       alt={listing.title}
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80';
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
 
@@ -742,6 +823,162 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
         )}
       </div>
 
+      {/* Apartment Reservations & Guest Stays (Upcoming & Past Bookings) */}
+      <div className="bg-white rounded-2xl border border-[#1B4332]/10 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-[#1B4332]/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-[#1B4332] font-serif">
+              Apartment Reservations
+            </h3>
+            <p className="text-xs text-[#6B756F] mt-0.5">
+              Review upcoming guest arrivals and past reservation history for your apartments.
+            </p>
+          </div>
+
+          <div className="inline-flex p-1 bg-[#FBF6EC] rounded-xl border border-[#1B4332]/10 text-xs font-semibold">
+            <button
+              type="button"
+              id="host-tab-upcoming-bookings"
+              onClick={() => setActiveReservationTab('upcoming')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activeReservationTab === 'upcoming'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
+                  : 'text-[#14231C] hover:text-[#1B4332]'
+              }`}
+            >
+              Upcoming ({upcomingBookings.length})
+            </button>
+            <button
+              type="button"
+              id="host-tab-past-bookings"
+              onClick={() => setActiveReservationTab('past')}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activeReservationTab === 'past'
+                  ? 'bg-[#1B4332] text-white shadow-sm'
+                  : 'text-[#14231C] hover:text-[#1B4332]'
+              }`}
+            >
+              Past Stays ({pastBookings.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Reservations Content */}
+        {isLoadingBookings ? (
+          <div className="p-12 text-center text-[#6B756F] text-xs flex flex-col items-center justify-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin text-[#2D6A4F]" />
+            <span>Loading apartment reservations...</span>
+          </div>
+        ) : (activeReservationTab === 'upcoming' ? upcomingBookings : pastBookings).length === 0 ? (
+          <div className="p-10 text-center space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-[#FBF6EC] text-[#2D6A4F] flex items-center justify-center mx-auto border border-[#1B4332]/10">
+              <Calendar className="w-6 h-6" />
+            </div>
+            <h4 className="text-sm font-bold text-[#14231C]">
+              {activeReservationTab === 'upcoming' ? 'No Upcoming Reservations' : 'No Past Reservations Yet'}
+            </h4>
+            <p className="text-xs text-[#6B756F] max-w-sm mx-auto">
+              {activeReservationTab === 'upcoming'
+                ? 'When guests book and complete escrow payment for your verified apartments, their trip details will appear here.'
+                : 'Your completed guest stays and past reservation history will be recorded here.'}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#1B4332]/10">
+            {(activeReservationTab === 'upcoming' ? upcomingBookings : pastBookings).map((booking) => {
+              // Map image using joined listings data first (booking.listings?.image_url)
+              const rawImg =
+                booking.listings?.image_url ||
+                booking.listings?.photos?.[0] ||
+                booking.listings?.images?.[0] ||
+                booking.listingPhoto ||
+                'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80';
+
+              return (
+                <div
+                  key={booking.id}
+                  id={`host-booking-card-${booking.id}`}
+                  className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5 hover:bg-[#FBF6EC]/30 transition-colors"
+                >
+                  {/* Apartment Image Thumbnail */}
+                  <div className="relative w-full sm:w-40 h-28 shrink-0 rounded-xl overflow-hidden bg-[#EFECE6] border border-[#1B4332]/10 flex items-center justify-center">
+                    <img
+                      src={rawImg}
+                      alt={booking.listings?.title || booking.listingTitle || 'Apartment'}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80';
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-xs text-white text-[10px] font-semibold">
+                      {booking.listings?.property_type || booking.propertyType || 'Apartment'}
+                    </div>
+                  </div>
+
+                  {/* Booking Details */}
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                      <h4 className="font-bold text-sm sm:text-base text-[#1B4332] font-serif truncate">
+                        {booking.listings?.title || booking.listingTitle || 'Verified Property'}
+                      </h4>
+                      <span className="text-[11px] font-mono text-[#6B756F]">
+                        Ref: #ILE-{booking.id.slice(0, 6)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-[#2D6A4F]">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">
+                        {booking.streetAddress || booking.listings?.street_address || ''}, {booking.cityArea || booking.listings?.city_area || ''}, {booking.state || booking.listings?.state || 'Nigeria'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-xs">
+                      <div>
+                        <span className="text-[10px] text-[#6B756F] block">Guest Name</span>
+                        <span className="font-bold text-[#14231C] flex items-center gap-1">
+                          <Users className="w-3 h-3 text-[#2D6A4F]" />
+                          {booking.guestFullName || 'Guest'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#6B756F] block">Dates & Duration</span>
+                        <span className="font-semibold text-[#14231C] flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-[#2D6A4F]" />
+                          {booking.checkInDate} – {booking.checkOutDate} ({booking.nights}n)
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#6B756F] block">Payout (Escrow)</span>
+                        <span className="font-extrabold text-[#1B4332] font-serif">
+                          ₦{(booking.totalPrice || booking.totalAmount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="sm:self-center shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+                        activeReservationTab === 'upcoming'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-gray-100 text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-current" />
+                      <span>{activeReservationTab === 'upcoming' ? 'Confirmed Stay' : 'Completed Stay'}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Active 'Delete Account' (Danger Zone) */}
       <div className="bg-white rounded-2xl border border-red-200 p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -782,10 +1019,14 @@ export const HostDashboardOverview: React.FC<HostDashboardOverviewProps> = ({
 
             <div className="bg-[#FBF6EC] p-3.5 rounded-xl border border-[#1B4332]/10 mb-5 flex items-center gap-3">
               <img
-                src={listingToDelete.photos?.[0] || listingToDelete.images?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&auto=format&fit=crop&q=80'}
+                src={listingToDelete.image_url || listingToDelete.photos?.[0] || listingToDelete.images?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&auto=format&fit=crop&q=80'}
                 alt={listingToDelete.title}
                 className="w-14 h-14 rounded-lg object-cover border border-[#1B4332]/10 shrink-0"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src =
+                    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&auto=format&fit=crop&q=80';
+                }}
               />
               <div className="min-w-0 flex-1">
                 <h4 className="font-bold text-xs text-[#14231C] truncate">{listingToDelete.title}</h4>

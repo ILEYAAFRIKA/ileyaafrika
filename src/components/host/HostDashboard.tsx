@@ -1150,10 +1150,13 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
                   >
                     <div className="relative aspect-video bg-black/5">
                       <img
-                        src={listing.images?.[0] || listing.photos?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80'}
+                        src={listing.image_url || listing.images?.[0] || listing.photos?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80'}
                         alt={listing.title}
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&auto=format&fit=crop&q=80';
+                        }}
                       />
                       <span className={`absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm ${
                         listing.status === 'approved' || listing.status === 'approved_live'

@@ -116,12 +116,34 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   useEffect(() => {
     let isMounted = true;
 
+    const enrichBookingsWithListings = (items: GuestBooking[]): GuestBooking[] => {
+      return items.map((b) => {
+        const matchedListing = listings.find((l) => l.id === b.listingId);
+        const resolvedPhoto =
+          b.listings?.image_url ||
+          b.listings?.photos?.[0] ||
+          b.listings?.images?.[0] ||
+          b.listingPhoto ||
+          matchedListing?.photos?.[0] ||
+          matchedListing?.images?.[0] ||
+          matchedListing?.image_url ||
+          '';
+
+        return {
+          ...b,
+          listingPhoto: resolvedPhoto,
+          listingTitle: b.listings?.title || b.listingTitle || matchedListing?.title || 'Verified Property',
+          listings: b.listings || (matchedListing ? { ...matchedListing, image_url: resolvedPhoto } : null),
+        };
+      });
+    };
+
     const loadBookings = async () => {
       try {
         const data = await getAllBookingsFromSupabase();
         if (isMounted && data) {
-          // Replaces state array entirely
-          setBookings(data);
+          // Replaces state array entirely with enriched bookings
+          setBookings(enrichBookingsWithListings(data));
         }
       } catch (err) {
         console.warn('Could not fetch guest bookings from Supabase:', err);
@@ -133,8 +155,8 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
     // Listen for real-time bookings updates from Supabase
     const unsubscribe = subscribeToBookings((data) => {
       if (isMounted && data) {
-        // Replaces state array entirely
-        setBookings(data);
+        // Replaces state array entirely with enriched bookings
+        setBookings(enrichBookingsWithListings(data));
       }
     });
 
@@ -375,6 +397,13 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
       status: 'confirmed',
       paymentStatus: bookingData.paymentStatus || 'completed',
       paymentReference: bookingData.paymentReference || '',
+      listings: {
+        ...selectedListingForBooking,
+        image_url:
+          (selectedListingForBooking.photos && selectedListingForBooking.photos[0]) ||
+          (selectedListingForBooking.images && selectedListingForBooking.images[0]) ||
+          '',
+      },
     };
 
     // CRITICAL: Ensure we do NOT push the new booking into the array twice!
