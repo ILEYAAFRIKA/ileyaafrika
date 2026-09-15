@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldCheck,
   MapPin,
@@ -6,9 +6,15 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Star,
+  MessageSquare,
+  Calendar,
+  UserCheck,
+  Loader2,
 } from 'lucide-react';
-import { PropertyListing, GuestBooking } from '../../types';
+import { PropertyListing, GuestBooking, Review } from '../../types';
 import { BookNow } from './BookNow';
+import { getReviewsForListing } from '../../lib/supabaseService';
 
 interface BookingModalProps {
   listing: PropertyListing;
@@ -39,6 +45,44 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   onConfirmBooking,
 }) => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(0);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState<boolean>(true);
+
+  // Fetch all records from the reviews table matching the current listing_id
+  useEffect(() => {
+    let isMounted = true;
+    const loadReviews = async () => {
+      if (!listing?.id) return;
+      setIsLoadingReviews(true);
+      try {
+        const data = await getReviewsForListing(listing.id);
+        if (isMounted) {
+          setReviews(data || []);
+        }
+      } catch (err) {
+        console.warn('Could not load reviews for listing:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingReviews(false);
+        }
+      }
+    };
+
+    loadReviews();
+    return () => {
+      isMounted = false;
+    };
+  }, [listing?.id]);
+
+  // Calculate average star rating (e.g., 4.8) and total review count
+  const { averageRating, totalReviewCount } = useMemo(() => {
+    if (!reviews || reviews.length === 0) {
+      return { averageRating: null, totalReviewCount: 0 };
+    }
+    const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
+    const avg = parseFloat((sum / reviews.length).toFixed(1));
+    return { averageRating: avg, totalReviewCount: reviews.length };
+  }, [reviews]);
 
   const photos =
     listing.photos && listing.photos.length > 0
@@ -125,9 +169,28 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
               {/* Title & Verified Address */}
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#1B4332]">
-                  {listing.title}
-                </h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#1B4332]">
+                    {listing.title}
+                  </h2>
+
+                  {/* Rating Badge Display near listing title */}
+                  {totalReviewCount > 0 && averageRating !== null ? (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBF6EC] border border-[#1B4332]/10 text-xs font-bold text-[#14231C] shadow-xs">
+                      <Star className="w-4 h-4 text-[#E8A33D] fill-[#E8A33D]" />
+                      <span>{averageRating.toFixed(1)}</span>
+                      <span className="text-[#6B756F] font-normal">
+                        ({totalReviewCount} {totalReviewCount === 1 ? 'review' : 'reviews'})
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBF6EC] border border-[#1B4332]/10 text-xs text-[#6B756F]">
+                      <Star className="w-3.5 h-3.5 text-gray-400" />
+                      <span>New Listing • No reviews yet</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-1.5 text-xs text-[#6B756F] mt-1">
                   <MapPin className="w-3.5 h-3.5 text-[#2D6A4F] shrink-0" />
                   <span>
@@ -188,12 +251,152 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 guestEmail={guestEmail}
                 initialCheckInDate={initialCheckInDate}
                 initialCheckOutDate={initialCheckOutDate}
+                averageRating={averageRating}
+                totalReviewCount={totalReviewCount}
                 onClose={onClose}
                 onSuccessBooking={(booking: GuestBooking) => {
                   onConfirmBooking(booking);
                 }}
               />
             </div>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* Guest Reviews Section (Bottom of the Public Listing Details) */}
+          {/* ------------------------------------------------------------- */}
+          <div className="border-t border-[#1B4332]/10 pt-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-[#1B4332] text-[#E8A33D] flex items-center justify-center">
+                    <Star className="w-4 h-4 fill-[#E8A33D]" />
+                  </div>
+                  <h3 className="text-lg font-bold font-serif text-[#1B4332]">
+                    Guest Reviews
+                  </h3>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#1B4332]/10 text-[#1B4332]">
+                    {totalReviewCount}
+                  </span>
+                </div>
+                <p className="text-xs text-[#6B756F]">
+                  Authentic reviews exclusively from guests who completed a verified stay
+                </p>
+              </div>
+
+              {/* Rating Summary Card */}
+              {totalReviewCount > 0 && averageRating !== null && (
+                <div className="p-3.5 rounded-2xl bg-[#FBF6EC] border border-[#1B4332]/10 flex items-center gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-extrabold font-serif text-[#1B4332]">
+                      {averageRating.toFixed(1)}
+                    </div>
+                    <div className="flex items-center gap-0.5 text-[#E8A33D] justify-center mt-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3.5 h-3.5 ${
+                            s <= Math.round(averageRating)
+                              ? 'fill-[#E8A33D] text-[#E8A33D]'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="h-9 w-px bg-[#1B4332]/10" />
+                  <div className="text-left">
+                    <div className="text-xs font-bold text-[#14231C]">
+                      Verified Resident Ratings
+                    </div>
+                    <div className="text-[11px] text-[#6B756F]">
+                      Based on {totalReviewCount} {totalReviewCount === 1 ? 'completed booking' : 'completed bookings'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Reviews List */}
+            {isLoadingReviews ? (
+              <div className="p-8 rounded-2xl bg-[#FBF6EC]/50 border border-[#1B4332]/10 flex items-center justify-center gap-2 text-xs text-[#6B756F]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#2D6A4F]" />
+                <span>Loading verified reviews...</span>
+              </div>
+            ) : reviews.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-[#FBF6EC] border border-[#1B4332]/10 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-white text-[#2D6A4F] flex items-center justify-center mx-auto shadow-xs border border-[#1B4332]/10">
+                  <MessageSquare className="w-5 h-5 text-[#2D6A4F]" />
+                </div>
+                <h4 className="text-sm font-bold text-[#14231C]">No Reviews Yet</h4>
+                <p className="text-xs text-[#6B756F] max-w-sm mx-auto">
+                  Be the first guest to share feedback after completing your stay at this physically verified property!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {reviews.map((review) => {
+                  const formattedDate = review.created_at
+                    ? new Date(review.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : 'Recent Stay';
+
+                  return (
+                    <div
+                      key={review.id}
+                      className="p-4 rounded-2xl bg-white border border-[#1B4332]/10 shadow-xs hover:border-[#1B4332]/25 transition-all space-y-3 flex flex-col justify-between"
+                    >
+                      <div className="space-y-2">
+                        {/* Guest Header & Stars */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-[#1B4332] text-[#E8A33D] font-bold text-xs flex items-center justify-center shadow-xs">
+                              {(review.guest_name || 'G')[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#14231C]">
+                                {review.guest_name || 'Verified Guest'}
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] text-[#2D6A4F] font-medium">
+                                <UserCheck className="w-3 h-3 text-[#2D6A4F]" />
+                                <span>Verified Resident</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Star Rating Display */}
+                          <div className="flex items-center gap-0.5 text-[#E8A33D]">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`w-3.5 h-3.5 ${
+                                  star <= review.rating
+                                    ? 'fill-[#E8A33D] text-[#E8A33D]'
+                                    : 'text-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Comment */}
+                        <p className="text-xs text-[#14231C] leading-relaxed whitespace-pre-line bg-[#FBF6EC]/60 p-3 rounded-xl border border-[#1B4332]/5">
+                          "{review.comment}"
+                        </p>
+                      </div>
+
+                      {/* Date */}
+                      <div className="flex items-center gap-1 text-[10px] text-[#6B756F] pt-1 border-t border-[#1B4332]/5">
+                        <Calendar className="w-3 h-3 text-[#6B756F]" />
+                        <span>Stay reviewed {formattedDate}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

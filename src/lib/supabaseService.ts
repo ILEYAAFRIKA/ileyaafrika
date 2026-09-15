@@ -4,7 +4,8 @@ import {
   RegisteredUser,
   PropertyListing,
   GuestBooking,
-  BankPayoutDetails
+  BankPayoutDetails,
+  Review
 } from '../types';
 
 /**
@@ -1155,3 +1156,190 @@ export function subscribeToAdminEmails(onUpdate: (emails: string[]) => void): ()
     }
   };
 }
+
+/**
+ * Evaluates whether midnight of the checkout day has strictly passed in local time.
+ * E.g., if checkout is 2026-09-14, midnight of that day (23:59:59.999) has passed.
+ */
+export function isCheckoutDateStrictlyPast(checkOutDateStr: string | undefined | null): boolean {
+  if (!checkOutDateStr) return false;
+  try {
+    const raw = String(checkOutDateStr).trim();
+    const datePart = raw.split('T')[0];
+    const parts = datePart.split('-');
+    if (parts.length < 3) {
+      const parsed = new Date(raw);
+      if (isNaN(parsed.getTime())) return false;
+      parsed.setHours(23, 59, 59, 999);
+      return Date.now() > parsed.getTime();
+    }
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+
+    // Midnight of the checkout day (end of that day: 23:59:59.999)
+    const endOfCheckoutDay = new Date(year, month, day, 23, 59, 59, 999);
+    return Date.now() > endOfCheckoutDay.getTime();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Strict eligibility checker for leaving a review on a booking:
+ * 1. payment_status is exactly 'completed'
+ * 2. check_out_date is strictly in the past (midnight of checkout day has passed)
+ * 3. The guest has not already left a review for this specific booking_id
+ */
+export function canLeaveReview(
+  booking: GuestBooking,
+  reviewedBookingIds: Set<string> | string[]
+): boolean {
+  if (!booking || !booking.id) return false;
+
+  // Condition 1: payment_status is exactly 'completed'
+  const paymentStatus = String(booking.paymentStatus || (booking as any).payment_status || '')
+    .trim()
+    .toLowerCase();
+  if (paymentStatus !== 'completed') {
+    return false;
+  }
+
+  // Condition 2: check_out_date is strictly in the past
+  const checkOutDate = booking.checkOutDate || (booking as any).check_out_date;
+  if (!isCheckoutDateStrictlyPast(checkOutDate)) {
+    return false;
+  }
+
+  // Condition 3: guest has not already left a review for this booking_id
+  const reviewedSet = Array.isArray(reviewedBookingIds)
+    ? new Set(reviewedBookingIds)
+    : reviewedBookingIds;
+
+  if (reviewedSet.has(booking.id)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Fetch all reviews from Supabase reviews table
+ */
+export async function getAllReviewsFromSupabase(): Promise<Review[]> {
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Error fetching all reviews from Supabase:', error.message);
+      return [];
+    }
+    return (data as Review[]) || [];
+  } catch (err) {
+    console.error('getAllReviewsFromSupabase error:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch reviews for a specific listing from Supabase
+ */
+export async function getReviewsForListing(listingId: string): Promise<Review[]> {
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('listing_id', listingId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Error fetching reviews for listing from Supabase:', error.message);
+      return [];
+    }
+    return (data as Review[]) || [];
+  } catch (err) {
+    console.error('getReviewsForListing error:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch existing reviewed booking IDs set from Supabase
+ */
+export async function getReviewedBookingIds(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('booking_id');
+
+    if (error) {
+      console.warn('Error fetching reviewed booking IDs from Supabase:', error.message);
+      return new Set();
+    }
+    const ids = new Set<string>();
+    if (Array.isArray(data)) {
+      data.forEach((r: any) => {
+        if (r.booking_id) ids.add(String(r.booking_id));
+      });
+    }
+    return ids;
+  } catch (err) {
+    console.error('getReviewedBookingIds error:', err);
+    return new Set();
+  }
+}
+
+/**
+ * Insert a review into Supabase with strict submission guard
+ */
+export async function insertReviewToSupabase(params: {
+  listingId: string;
+  bookingId: string;
+  guestName: string;
+  rating: number;
+  comment: string;
+  checkOutDate?: string;
+}): Promise<{ data: Review | null; error: any }> {
+  // Submission Guard: Re-verify that check-out date is in the past
+  if (params.checkOutDate && !isCheckoutDateStrictlyPast(params.checkOutDate)) {
+    const errorMsg = 'Reviews can only be submitted after your stay is fully completed.';
+    return {
+      data: null,
+      error: new Error(errorMsg),
+    };
+  }
+
+  try {
+    const reviewId = generateUUID();
+    const payload = {
+      id: reviewId,
+      listing_id: params.listingId,
+      booking_id: params.bookingId,
+      guest_name: params.guestName.trim() || 'Verified Guest',
+      rating: Math.min(5, Math.max(1, Math.round(params.rating))),
+      comment: params.comment.trim(),
+      created_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert([payload])
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error('Supabase insert review error:', error);
+      return { data: null, error };
+    }
+
+    return { data: (data as Review) || (payload as Review), error: null };
+  } catch (err: any) {
+    console.error('insertReviewToSupabase error:', err);
+    return { data: null, error: err };
+  }
+}
+

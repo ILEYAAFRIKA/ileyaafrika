@@ -9,19 +9,28 @@ import {
   Clock,
   CheckCircle2,
   Users,
-  Building2
+  Building2,
+  Star
 } from 'lucide-react';
 import { GuestBooking } from '../../types';
+import { canLeaveReview } from '../../lib/supabaseService';
 
 interface BookingHistoryCardProps {
   booking: GuestBooking;
   isPast?: boolean;
+  reviewedBookingIds?: Set<string>;
+  onLeaveReview?: (booking: GuestBooking) => void;
 }
 
 export const BookingHistoryCard: React.FC<BookingHistoryCardProps> = ({
   booking,
   isPast = false,
+  reviewedBookingIds,
+  onLeaveReview,
 }) => {
+  const isEligibleForReview = canLeaveReview(booking, reviewedBookingIds || new Set());
+  const alreadyReviewed = !!reviewedBookingIds?.has(booking.id);
+
   const encodedAddress = encodeURIComponent(
     `${booking.streetAddress}, ${booking.cityArea}, ${booking.state}, Nigeria`
   );
@@ -133,6 +142,27 @@ export const BookingHistoryCard: React.FC<BookingHistoryCardProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Leave a Review Button (Strictly rendered if payment_status is completed, checkout_date is in the past, and not yet reviewed) */}
+            {isEligibleForReview && (
+              <button
+                type="button"
+                id={`leave-review-btn-${booking.id}`}
+                onClick={() => onLeaveReview && onLeaveReview(booking)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#1B4332] hover:bg-[#14231C] text-[#E8A33D] transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs border border-[#E8A33D]/30 active:scale-95"
+              >
+                <Star className="w-3.5 h-3.5 fill-[#E8A33D] text-[#E8A33D]" />
+                <span>Leave a Review</span>
+              </button>
+            )}
+
+            {/* Already Reviewed Indicator */}
+            {alreadyReviewed && (
+              <div className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 border border-emerald-200 text-[#2D6A4F] inline-flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#2D6A4F]" />
+                <span>Reviewed ✓</span>
+              </div>
+            )}
+
             {/* Get Directions Button */}
             <a
               href={mapsUrl}

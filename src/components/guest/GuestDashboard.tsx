@@ -20,14 +20,18 @@ import { PropertyCard } from './PropertyCard';
 import { BookingModal } from './BookingModal';
 import { BookingConfirmationModal } from './BookingConfirmationModal';
 import { MyBookingsTab } from './MyBookingsTab';
-import { PropertyListing, UserSession, GuestViewTab, GuestBooking } from '../../types';
+import { ReviewModal } from './ReviewModal';
+import { PropertyListing, UserSession, GuestViewTab, GuestBooking, Review } from '../../types';
 import { NIGERIAN_STATES } from '../../data/nigerianData';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 import {
   getAllBookingsFromSupabase,
   subscribeToBookings,
   getUnavailableListingIdsForDates,
   formatDateToYYYYMMDD,
+  getReviewedBookingIds,
+  getAllReviewsFromSupabase,
 } from '../../lib/supabaseService';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -52,6 +56,59 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
 
   // Bookings state for Guest Dashboard
   const [bookings, setBookings] = useState<GuestBooking[]>(() => contextBookings || []);
+
+  // Review System State
+  const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<string>>(new Set());
+  const [activeReviewBooking, setActiveReviewBooking] = useState<GuestBooking | null>(null);
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
+  const [reviewToast, setReviewToast] = useState<string | null>(null);
+
+  // Fetch all reviews and existing reviewed booking IDs from Supabase
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadReviewsData = async () => {
+      try {
+        const [ids, reviews] = await Promise.all([
+          getReviewedBookingIds(),
+          getAllReviewsFromSupabase(),
+        ]);
+        if (isMounted) {
+          setReviewedBookingIds(ids);
+          setAllReviews(reviews);
+        }
+      } catch (err) {
+        console.warn('Could not load reviews in GuestDashboard:', err);
+      }
+    };
+
+    loadReviewsData();
+
+    // Supabase real-time subscription on reviews table
+    let channel: any = null;
+    try {
+      const channelName = `guest_reviews_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
+          loadReviewsData();
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('Could not create reviews realtime channel:', err);
+    }
+
+    return () => {
+      isMounted = false;
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (removeErr) {
+          console.warn('Error removing reviews channel:', removeErr);
+        }
+      }
+    };
+  }, []);
 
   // Fetch bookings inside useEffect:
   // Strictly replace the state array entirely (setBookings(data)) instead of appending
@@ -642,10 +699,36 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
         {activeTab === 'my-bookings' && (
           <MyBookingsTab
             myBookings={userBookings}
+            reviewedBookingIds={reviewedBookingIds}
+            onLeaveReview={(booking) => setActiveReviewBooking(booking)}
             onExploreClick={() => setActiveTab('explore')}
           />
         )}
       </main>
+
+      {/* Review Success Toast Notification */}
+      {reviewToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#1B4332] text-white px-5 py-3 rounded-2xl shadow-2xl border border-[#E8A33D]/30 flex items-center gap-2.5 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-[#E8A33D] shrink-0" />
+          <span className="text-xs font-semibold">{reviewToast}</span>
+        </div>
+      )}
+
+      {/* Review Submission Modal with Strict Guards */}
+      {activeReviewBooking && (
+        <ReviewModal
+          booking={activeReviewBooking}
+          guestName={session?.fullName || 'Verified Guest'}
+          isOpen={!!activeReviewBooking}
+          onClose={() => setActiveReviewBooking(null)}
+          onSuccess={(newReview) => {
+            setReviewedBookingIds((prev) => new Set([...prev, newReview.booking_id]));
+            setAllReviews((prev) => [newReview, ...prev.filter((r) => r.id !== newReview.id)]);
+            setReviewToast('Your review has been submitted and published successfully!');
+            setTimeout(() => setReviewToast(null), 5000);
+          }}
+        />
+      )}
 
       {/* Booking Calculation & Confirmation Modals */}
       {selectedListingForBooking && (

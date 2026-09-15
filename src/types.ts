@@ -108,3 +108,13 @@ export interface GuestBooking {
   paymentStatus?: 'completed' | 'pending' | 'failed' | string;
   paymentReference?: string;
 }
+
+export interface Review {
+  id: string;
+  listing_id: string;
+  booking_id: string;
+  guest_name: string;
+  rating: number; // 1-5
+  comment: string;
+  created_at: string;
+}

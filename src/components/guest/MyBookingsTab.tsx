@@ -15,12 +15,16 @@ import { BookingHistoryCard } from './BookingHistoryCard';
 
 interface MyBookingsTabProps {
   myBookings: GuestBooking[];
+  reviewedBookingIds?: Set<string>;
   onExploreClick: () => void;
+  onLeaveReview?: (booking: GuestBooking) => void;
 }
 
 export const MyBookingsTab: React.FC<MyBookingsTabProps> = ({
   myBookings,
+  reviewedBookingIds,
   onExploreClick,
+  onLeaveReview,
 }) => {
   const today = new Date().toISOString().split('T')[0];
 
@@ -119,6 +123,8 @@ export const MyBookingsTab: React.FC<MyBookingsTabProps> = ({
                 key={booking.id}
                 booking={booking}
                 isPast={false}
+                reviewedBookingIds={reviewedBookingIds}
+                onLeaveReview={onLeaveReview}
               />
             ))}
           </div>
@@ -150,6 +156,8 @@ export const MyBookingsTab: React.FC<MyBookingsTabProps> = ({
                 key={booking.id}
                 booking={booking}
                 isPast={true}
+                reviewedBookingIds={reviewedBookingIds}
+                onLeaveReview={onLeaveReview}
               />
             ))}
           </div>
