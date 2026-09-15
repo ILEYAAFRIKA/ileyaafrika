@@ -20,11 +20,15 @@ export async function getUserFromSupabase(uid: string): Promise<RegisteredUser |
       .maybeSingle();
 
     if (!profileError && profileData) {
+      let resolvedName = profileData.full_name || profileData.fullName || (profileData.first_name ? `${profileData.first_name} ${profileData.last_name || ''}`.trim() : '') || '';
+      if (typeof resolvedName === 'string' && (resolvedName.toLowerCase().includes('diagnostic probe') || resolvedName.toLowerCase().includes('diagnostic.probe'))) {
+        resolvedName = '';
+      }
       return {
         id: profileData.id,
         uid: profileData.id,
         email: profileData.email,
-        fullName: profileData.full_name || profileData.fullName || '',
+        fullName: resolvedName,
         role: profileData.role || 'guest',
         createdAt: profileData.created_at,
       };
@@ -63,11 +67,15 @@ export async function getUserByEmailFromSupabase(email: string): Promise<Registe
       .maybeSingle();
 
     if (!profileError && profileData) {
+      let resolvedName = profileData.full_name || profileData.fullName || (profileData.first_name ? `${profileData.first_name} ${profileData.last_name || ''}`.trim() : '') || '';
+      if (typeof resolvedName === 'string' && (resolvedName.toLowerCase().includes('diagnostic probe') || resolvedName.toLowerCase().includes('diagnostic.probe'))) {
+        resolvedName = '';
+      }
       return {
         id: profileData.id,
         uid: profileData.id,
         email: profileData.email,
-        fullName: profileData.full_name || profileData.fullName || '',
+        fullName: resolvedName,
         role: profileData.role || 'guest',
         createdAt: profileData.created_at,
       };

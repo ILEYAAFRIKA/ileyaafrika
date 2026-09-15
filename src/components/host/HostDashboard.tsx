@@ -90,15 +90,35 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
         const { data: authData } = await supabase.auth.getUser();
         const user = authData?.user;
         if (user) {
+          const isCorruptedDiagnosticString = (val?: string | null): boolean => {
+            if (!val || typeof val !== 'string') return false;
+            const lower = val.toLowerCase();
+            return lower.includes('diagnostic probe') || lower.includes('diagnostic.probe') || lower.includes('automated diagnostic') || lower.includes('probe (');
+          };
+
           const metaName = user.user_metadata?.fullName || user.user_metadata?.full_name;
-          if (metaName) {
+          if (metaName && !isCorruptedDiagnosticString(metaName)) {
             setHostDisplayName(metaName);
           }
-          const identifier = user.id || user.email || session?.email || '';
-          if (identifier) {
-            const dbUser = await getUserFromSupabase(identifier);
-            if (dbUser?.fullName) {
-              setHostDisplayName(dbUser.fullName);
+
+          if (user.id) {
+            const { data: profileRecord } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .maybeSingle();
+
+            const pName = profileRecord?.full_name || profileRecord?.fullName || (profileRecord?.first_name ? `${profileRecord.first_name} ${profileRecord.last_name || ''}`.trim() : '');
+            if (pName && !isCorruptedDiagnosticString(pName)) {
+              setHostDisplayName(pName);
+            } else {
+              const identifier = user.id || user.email || session?.email || '';
+              if (identifier) {
+                const dbUser = await getUserFromSupabase(identifier);
+                if (dbUser?.fullName && !isCorruptedDiagnosticString(dbUser.fullName)) {
+                  setHostDisplayName(dbUser.fullName);
+                }
+              }
             }
           }
           const email = user.email || session?.email;

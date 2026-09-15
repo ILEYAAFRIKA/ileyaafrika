@@ -53,15 +53,15 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             />
           </div>
 
-          {/* User Email & Logout Action */}
+          {/* User Profile & Logout Action */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <div className="text-right hidden md:block min-w-0">
               <div className="text-xs font-semibold text-white flex items-center justify-end gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D] shrink-0" />
-                <span className="truncate max-w-48">{session?.email || 'emmanuelolarinde53@gmail.com'}</span>
+                <span className="truncate max-w-48">{session?.fullName || session?.email || 'Operations Admin'}</span>
               </div>
               <span className="text-[11px] text-[#FBF6EC]/70">
-                {isMasterAdmin ? 'Full Authorization' : 'Operations Staff'}
+                {isMasterAdmin ? 'Master Admin' : 'Operations Staff'}
               </span>
             </div>
 

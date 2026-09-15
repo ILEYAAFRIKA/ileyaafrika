@@ -114,8 +114,8 @@ export const SupabaseDiagnosticRoutine: React.FC<SupabaseDiagnosticRoutineProps>
     const payload = {
       id: testId,
       listing_id: 'il-524270',
-      guest_name: 'Live Diagnostic Guest',
-      guest_email: 'diagnostic.guest@ileya.ng',
+      guest_name: 'Verification Test Guest',
+      guest_email: 'test.verification@ileya.ng',
       amount_paid: 150000,
       check_in_date: '2026-11-10',
       check_out_date: '2026-11-14',

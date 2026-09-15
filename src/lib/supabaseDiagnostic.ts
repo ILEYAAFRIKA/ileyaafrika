@@ -145,17 +145,31 @@ export async function runSupabaseDiagnostics(): Promise<DiagnosticReport> {
     // ignore
   }
 
+  // CRITICAL: NEVER overwrite an authenticated user's actual profile with diagnostic mock strings!
   const profileTargetId = authUser?.id || testProfileUUID;
-  const profilePayload = {
-    id: profileTargetId,
-    full_name: `Diagnostic Probe (${authUser ? 'Auth User' : 'Test UUID'})`,
-    role: 'guest',
-    updated_at: new Date().toISOString(),
-  };
 
   const pInsertStart = performance.now();
   try {
-    const res = await supabase.from('profiles').upsert([profilePayload], { onConflict: 'id' }).select();
+    let res: any;
+    if (authUser?.id) {
+      // If user is logged in, fetch their real name so we never corrupt it
+      const { data: existingProf } = await supabase.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+      const realName = existingProf?.full_name || authUser.user_metadata?.fullName || authUser.user_metadata?.full_name || 'Verified User';
+      res = await supabase.from('profiles').upsert([{
+        id: authUser.id,
+        full_name: realName,
+        role: existingProf?.role || 'guest',
+        updated_at: new Date().toISOString(),
+      }], { onConflict: 'id' }).select();
+    } else {
+      const profilePayload = {
+        id: testProfileUUID,
+        full_name: 'Verification Probe User',
+        role: 'guest',
+        updated_at: new Date().toISOString(),
+      };
+      res = await supabase.from('profiles').upsert([profilePayload], { onConflict: 'id' }).select();
+    }
     const duration = Math.round(performance.now() - pInsertStart);
     
     if (res.error) {
@@ -282,8 +296,8 @@ export async function runSupabaseDiagnostics(): Promise<DiagnosticReport> {
   const bookingPayload = {
     id: testBookingUUID,
     listing_id: 'il-524270', // verified listing ID
-    guest_name: 'Automated Diagnostic Probe',
-    guest_email: 'diagnostic.probe@ileya.ng',
+    guest_name: 'Verification Probe Guest',
+    guest_email: 'verification.probe@ileya.ng',
     amount_paid: 250000,
     check_in_date: '2026-11-01',
     check_out_date: '2026-11-05',

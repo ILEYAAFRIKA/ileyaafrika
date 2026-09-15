@@ -99,9 +99,11 @@ export const GuestHeader: React.FC<GuestHeaderProps> = ({
             <span className="text-xs font-bold text-[#14231C] truncate max-w-36">
               {session?.fullName || 'Valued Guest'}
             </span>
-            <span className="text-[11px] text-[#6B756F] truncate max-w-36">
-              {session?.email || 'guest@ileya.ng'}
-            </span>
+            {session?.email && (
+              <span className="text-[11px] text-[#6B756F] truncate max-w-36">
+                {session.email}
+              </span>
+            )}
           </div>
 
           <div className="hidden sm:flex w-9 h-9 rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] items-center justify-center shrink-0">
@@ -214,9 +216,11 @@ export const GuestHeader: React.FC<GuestHeaderProps> = ({
                 <span className="text-xs font-bold text-[#14231C] block truncate">
                   {session?.fullName || 'Valued Guest'}
                 </span>
-                <span className="text-[10px] text-[#6B756F] block truncate">
-                  {session?.email || 'guest@ileya.ng'}
-                </span>
+                {session?.email && (
+                  <span className="text-[10px] text-[#6B756F] block truncate">
+                    {session.email}
+                  </span>
+                )}
               </div>
             </div>
 

@@ -211,7 +211,13 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
         const supaUser = data.user;
         const uid = supaUser?.id || `user-${Date.now()}`;
 
-        // Fetch User Profile from Supabase to determine role
+        // Fetch User Profile directly from Supabase profiles table
+        const { data: directProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', uid)
+          .maybeSingle();
+
         let dbUser = await getUserFromSupabase(uid);
         if (!dbUser && trimmedEmail) {
           dbUser = await getUserFromSupabase(trimmedEmail);
@@ -227,20 +233,46 @@ export const AuthPortal: React.FC<AuthPortalProps> = ({
           determinedRole = 'master_admin';
         } else if (isAdmin) {
           determinedRole = 'admin';
+        } else if (directProfile?.role) {
+          determinedRole = directProfile.role;
         } else if (dbUser?.role) {
           determinedRole = dbUser.role;
         } else if (supaUser?.user_metadata?.role) {
           determinedRole = supaUser.user_metadata.role;
         }
 
-        const userDisplayName =
+        const isCorruptedDiagnosticString = (val?: string | null): boolean => {
+          if (!val || typeof val !== 'string') return false;
+          const lower = val.toLowerCase();
+          return lower.includes('diagnostic probe') || lower.includes('diagnostic.probe') || lower.includes('automated diagnostic') || lower.includes('probe (');
+        };
+
+        const rawProfileName =
+          directProfile?.full_name ||
+          directProfile?.fullName ||
+          (directProfile?.first_name ? `${directProfile.first_name} ${directProfile.last_name || ''}`.trim() : '') ||
+          directProfile?.name ||
           dbUser?.fullName ||
+          '';
+
+        const rawMetaName =
           supaUser?.user_metadata?.fullName ||
-          (isMaster
-            ? 'Emmanuel Olarinde (Master Admin)'
-            : isAdmin
-            ? 'Operations Admin'
-            : trimmedEmail.split('@')[0]);
+          supaUser?.user_metadata?.full_name ||
+          (supaUser?.user_metadata?.first_name ? `${supaUser.user_metadata.first_name} ${supaUser.user_metadata.last_name || ''}`.trim() : '') ||
+          supaUser?.user_metadata?.name ||
+          '';
+
+        let userDisplayName = '';
+        if (rawProfileName && !isCorruptedDiagnosticString(rawProfileName)) {
+          userDisplayName = rawProfileName;
+        } else if (rawMetaName && !isCorruptedDiagnosticString(rawMetaName)) {
+          userDisplayName = rawMetaName;
+        } else if (isMaster) {
+          userDisplayName = 'Emmanuel Olarinde';
+        } else {
+          const emailPrefix = trimmedEmail.split('@')[0];
+          userDisplayName = emailPrefix.replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        }
 
         const session = {
           uid,

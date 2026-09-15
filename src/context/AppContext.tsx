@@ -194,31 +194,120 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async function handleUserSession(supaUser: any) {
       try {
         const uid = supaUser.id;
-        const email = supaUser.email || '';
-        const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase() || email.toLowerCase() === 'emmanuelolarinde53@gmail.com';
+        const email = (supaUser.email || '').trim().toLowerCase();
+        const isMaster = email === MASTER_ADMIN_EMAIL.toLowerCase() || email === 'emmanuelolarinde53@gmail.com';
         
-        let dbUser = await getUserFromSupabase(uid);
-        if (!dbUser && email) {
-          dbUser = await getUserFromSupabase(email);
+        // 1. Immediately execute a direct .select() query to the profiles table using authenticated user's id
+        const { data: profileRecord, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', uid)
+          .maybeSingle();
+
+        if (profileError) {
+          console.warn('[AuthContext] Note on profiles table select:', profileError.message);
         }
 
+        // Secondary fallback to users table or email query if profiles row doesn't exist yet
+        let dbUser = profileRecord;
+        if (!dbUser && email) {
+          dbUser = await getUserFromSupabase(uid);
+          if (!dbUser) {
+            dbUser = await getUserFromSupabase(email);
+          }
+        }
+
+        // 2. Determine Role
         let userRole: UserRole = 'guest';
         if (isMaster) {
           userRole = 'master_admin';
-        } else if (adminEmails.some((a) => a.toLowerCase() === email.toLowerCase())) {
+        } else if (adminEmails.some((a) => a.toLowerCase() === email)) {
           userRole = 'admin';
-        } else if (dbUser?.role) {
-          userRole = dbUser.role;
+        } else if (profileRecord?.role) {
+          userRole = profileRecord.role;
+        } else if ((dbUser as any)?.role) {
+          userRole = (dbUser as any).role;
         } else if (supaUser.user_metadata?.role) {
           userRole = supaUser.user_metadata.role;
         }
 
-        const determinedFullName = dbUser?.fullName || (dbUser as any)?.full_name || supaUser.user_metadata?.fullName || supaUser.user_metadata?.full_name || (isMaster ? 'Emmanuel Olarinde (Master Admin)' : (email.split('@')[0] || 'User'));
+        // 3. Extract and Sanitize Name from profiles table (filtering out any legacy diagnostic mocks)
+        const isCorruptedDiagnosticString = (val?: string | null): boolean => {
+          if (!val || typeof val !== 'string') return false;
+          const lower = val.toLowerCase();
+          return lower.includes('diagnostic probe') || lower.includes('diagnostic.probe') || lower.includes('automated diagnostic') || lower.includes('probe (');
+        };
 
+        const rawProfileName =
+          profileRecord?.full_name ||
+          profileRecord?.fullName ||
+          (profileRecord?.first_name
+            ? `${profileRecord.first_name} ${profileRecord.last_name || ''}`.trim()
+            : '') ||
+          profileRecord?.name ||
+          (dbUser as any)?.fullName ||
+          (dbUser as any)?.full_name ||
+          '';
+
+        const rawMetaName =
+          supaUser.user_metadata?.fullName ||
+          supaUser.user_metadata?.full_name ||
+          (supaUser.user_metadata?.first_name
+            ? `${supaUser.user_metadata.first_name} ${supaUser.user_metadata.last_name || ''}`.trim()
+            : '') ||
+          supaUser.user_metadata?.name ||
+          '';
+
+        let actualName = '';
+        if (rawProfileName && !isCorruptedDiagnosticString(rawProfileName)) {
+          actualName = rawProfileName;
+        } else if (rawMetaName && !isCorruptedDiagnosticString(rawMetaName)) {
+          actualName = rawMetaName;
+        } else if (isMaster) {
+          actualName = 'Emmanuel Olarinde';
+        } else if (email) {
+          const emailPrefix = email.split('@')[0];
+          actualName = emailPrefix.replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        } else {
+          actualName = 'Valued User';
+        }
+
+        // If the database profiles table contained the corrupted diagnostic probe string, self-heal it immediately
+        if (profileRecord && isCorruptedDiagnosticString(profileRecord.full_name)) {
+          console.log('[AuthContext] Healing corrupted diagnostic probe name in profiles table for user:', uid, '->', actualName);
+          try {
+            await supabase
+              .from('profiles')
+              .update({ full_name: actualName, updated_at: new Date().toISOString() })
+              .eq('id', uid);
+          } catch (e) {
+            console.warn('Profile heal update notice:', e);
+          }
+        }
+
+        // If profiles table has no record yet, create one for the authenticated user
+        if (!profileRecord && supaUser) {
+          try {
+            await supabase
+              .from('profiles')
+              .upsert({
+                id: uid,
+                email: email,
+                full_name: actualName,
+                role: userRole,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'id' });
+          } catch (e) {
+            console.warn('Profile auto-create notice:', e);
+          }
+        }
+
+        // 4. Update React user state with the actual name retrieved from the profiles table
         const sessionUser: UserSession = {
           uid,
           email,
-          fullName: determinedFullName,
+          fullName: actualName,
           role: userRole,
           isMasterAdmin: isMaster,
           isAuthenticated: true,
@@ -238,7 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }).catch((e) => console.warn('Supabase payout fetch warning:', e));
         }
       } catch (error) {
-        console.error("Error fetching user role from Supabase:", error);
+        console.error("Error fetching user profile from Supabase:", error);
       } finally {
         setAuthLoading(false);
       }
