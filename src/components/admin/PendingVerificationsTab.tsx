@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { PropertyListing } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { useApp } from '../../context/AppContext';
 import { VerificationEvidenceModal } from '../common/VerificationEvidenceModal';
 
 interface PendingVerificationsTabProps {
@@ -53,6 +54,13 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
   const [uploadProgressText, setUploadProgressText] = useState<string>('');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // App context for global listings synchronization
+  const { refreshListings } = useApp();
+
+  // Delist state
+  const [listingToDelist, setListingToDelist] = useState<PropertyListing | null>(null);
+  const [isDelisting, setIsDelisting] = useState<boolean>(false);
 
   // Reject Modal State
   const [rejectingListingId, setRejectingListingId] = useState<string | null>(null);
@@ -194,7 +202,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
     setFilePreviews(updatedPreviews);
   };
 
-  // Submit Verification: Promise.all upload to 'verifications' bucket + Supabase DB update
+  // Submit Verification: Loop upload to 'verifications' bucket + Supabase DB update
   const handleConfirmVerification = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!verifyingListing) return;
@@ -205,112 +213,192 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
 
     try {
       const listingId = verifyingListing.id;
-      let uploadedPublicUrls: string[] = [];
+      let uploadedUrls: string[] = [];
 
-      // 1. Upload Logic using Promise.all to the 'verifications' storage bucket
+      // 1. Evidence Upload Logic: Loop through attached files and upload to 'verifications' bucket
       if (selectedFiles.length > 0) {
-        setUploadProgressText(`Uploading ${selectedFiles.length} verification asset(s) to 'verifications' bucket...`);
-
-        const uploadPromises = selectedFiles.map(async (file, index) => {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
           const fileExt = file.name.split('.').pop() || (file.type.startsWith('video') ? 'mp4' : 'jpg');
           const timestamp = Date.now();
           const randomId = Math.random().toString(36).substring(2, 8);
-          const cleanFileName = `evidence_${listingId}_${timestamp}_${index}_${randomId}.${fileExt}`;
+          const cleanFileName = `evidence_${listingId}_${timestamp}_${i}_${randomId}.${fileExt}`;
           const filePath = `${listingId}/${cleanFileName}`;
 
-          // Upload to 'verifications' bucket
+          setUploadProgressText(`Uploading file ${i + 1} of ${selectedFiles.length} (${file.name})...`);
+
           const { error: uploadError } = await supabase.storage
             .from('verifications')
             .upload(filePath, file, {
               cacheControl: '3600',
-              upsert: false,
+              upsert: true,
             });
 
           if (uploadError) {
             console.error(`Upload error for ${file.name}:`, uploadError);
-            throw new Error(`Failed to upload ${file.name}: ${uploadError.message}`);
+            throw new Error(`Failed to upload ${file.name} to 'verifications' bucket: ${uploadError.message}`);
           }
 
-          // Public URLs: Immediately call getPublicUrl to get the viewable link
+          // Generate the public URL via supabase.storage.from('verifications').getPublicUrl(path).data.publicUrl
           const { data: publicUrlData } = supabase.storage
             .from('verifications')
             .getPublicUrl(filePath);
 
-          return publicUrlData.publicUrl;
-        });
-
-        uploadedPublicUrls = await Promise.all(uploadPromises);
+          const publicUrl = publicUrlData.publicUrl;
+          uploadedUrls.push(publicUrl);
+        }
       }
 
-      setUploadProgressText('Updating database listing verification status...');
+      setUploadProgressText('Updating listing verification status in Supabase...');
 
-      // Combine with any pre-existing evidence URLs if present
       const existingUrls = verifyingListing.verification_evidence_urls || verifyingListing.verificationEvidenceUrls || [];
-      const allEvidenceUrls = [...existingUrls, ...uploadedPublicUrls];
-
       const notes = verificationNotesInput.trim() || 'Physical inspection confirmed on-site by Ileya Afrika operations team.';
 
-      // 2. Database Update: Update listing record:
-      // verification_status: 'verified'
-      // verification_notes: notes
-      // verification_evidence_urls: array of public URLs
-      const { error: dbError } = await supabase
+      // 2. Database Update: If no files are attached (or after files upload), execute the update query:
+      const { data, error } = await supabase
         .from('listings')
         .update({
           verification_status: 'verified',
-          verification_notes: notes,
-          verification_evidence_urls: allEvidenceUrls,
-          status: 'approved_live',
-          is_physically_verified: true,
+          verification_notes: notes || null,
+          verification_evidence_urls: uploadedUrls.length > 0 ? uploadedUrls : existingUrls,
+          status: 'approved' // or is_active: true depending on schema
         })
-        .eq('id', listingId);
+        .eq('id', listingId)
+        .select();
 
-      if (dbError) {
-        console.warn('Supabase listing update warning:', dbError.message);
-        // Continue anyway to sync local state
+      if (error) throw error;
+
+      // Check that data actually returned an updated row. If data is empty, notify the admin that permissions blocked the update.
+      if (!data || data.length === 0) {
+        const permError = 'Permissions blocked the update or listing was not found. Please verify your Supabase Row Level Security (RLS) policies for admin accounts.';
+        alert(permError);
+        throw new Error(permError);
       }
 
-      // Notify parent & AppContext
-      onApproveListing(listingId, notes, allEvidenceUrls);
+      const allEvidenceUrls = uploadedUrls.length > 0 ? uploadedUrls : existingUrls;
 
-      // Update local dbListings state
-      setDbListings((prev) =>
-        prev.map((l) =>
-          l.id === listingId
-            ? {
-                ...l,
-                verification_status: 'verified',
-                verificationStatus: 'verified',
-                verification_notes: notes,
-                verificationNotes: notes,
-                verification_evidence_urls: allEvidenceUrls,
-                verificationEvidenceUrls: allEvidenceUrls,
-                status: 'approved_live',
-                isPhysicallyVerified: true,
-              }
-            : l
-        )
-      );
+      // Notify parent & AppContext
+      try {
+        onApproveListing(listingId, notes, allEvidenceUrls);
+      } catch (onApproveErr) {
+        console.warn('onApproveListing notice:', onApproveErr);
+      }
+
+      // Automatically refresh the local listings state after a successful approve action so the UI updates immediately
+      await fetchPendingListings();
+      await refreshListings();
 
       // Toast feedback
-      setSuccessToast(`Successfully verified "${verifyingListing.title}". Badge and evidence are now public!`);
+      setSuccessToast(`Successfully verified "${verifyingListing.title}". Status updated to approved and evidence persisted!`);
       setTimeout(() => setSuccessToast(null), 5000);
 
-      // Close modal
+      // Close modal & reset form
       setVerifyingListing(null);
       setSelectedFiles([]);
       setFilePreviews([]);
     } catch (err: any) {
       console.error('Verification submission failed:', err);
-      setUploadError(err.message || 'Verification upload failed. Please try again.');
+      const errMsg = err?.message || 'Verification upload / update failed. Please try again.';
+      setUploadError(errMsg);
+      alert(`Approval & Evidence Upload Error: ${errMsg}`);
     } finally {
       setIsUploading(false);
       setUploadProgressText('');
     }
   };
 
+  // Quick Approve (Direct approve without new files)
+  const handleQuickApprove = async (listing: PropertyListing, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const listingId = listing.id;
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      const existingUrls = listing.verification_evidence_urls || listing.verificationEvidenceUrls || [];
+      const notes = listing.verification_notes || listing.verificationNotes || 'Physical inspection confirmed on-site by Ileya Afrika operations team.';
+
+      const { data, error } = await supabase
+        .from('listings')
+        .update({
+          verification_status: 'verified',
+          verification_notes: notes || null,
+          verification_evidence_urls: existingUrls,
+          status: 'approved'
+        })
+        .eq('id', listingId)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        const permError = 'Permissions blocked the update or listing was not found. Please verify your Supabase Row Level Security (RLS) policies.';
+        alert(permError);
+        throw new Error(permError);
+      }
+
+      try {
+        onApproveListing(listingId, notes, existingUrls);
+      } catch (err) {
+        console.warn('onApproveListing notice:', err);
+      }
+
+      await fetchPendingListings();
+      await refreshListings();
+
+      setSuccessToast(`Successfully approved "${listing.title}".`);
+      setTimeout(() => setSuccessToast(null), 5000);
+    } catch (err: any) {
+      console.error('Quick approve failed:', err);
+      const errMsg = err?.message || 'Quick approve failed.';
+      alert(`Approve Error: ${errMsg}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Delisting Handlers (Prompt Requirement #3)
+  const handlePromptDelist = (listing: PropertyListing, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setListingToDelist(listing);
+  };
+
+  const handleConfirmDelist = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!listingToDelist) return;
+    const listingId = listingToDelist.id;
+    setIsDelisting(true);
+
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .update({ 
+          status: 'delisted',
+          // or is_active: false
+        })
+        .eq('id', listingId);
+
+      if (error) throw error;
+
+      // Automatically refresh the local listings state after a successful delist action so the UI updates immediately
+      await fetchPendingListings();
+      await refreshListings();
+
+      setSuccessToast(`Successfully delisted "${listingToDelist.title}".`);
+      setTimeout(() => setSuccessToast(null), 5000);
+      setListingToDelist(null);
+    } catch (err: any) {
+      console.error('Delist error:', err);
+      const errMsg = err?.message || 'Failed to delist property. Check Supabase database permissions.';
+      alert(`Delist Error: ${errMsg}`);
+    } finally {
+      setIsDelisting(false);
+    }
+  };
+
   // Rejection handling
-  const handleOpenRejectModal = (id: string) => {
+  const handleOpenRejectModal = (id: string, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     setRejectingListingId(id);
     setRejectionReasonInput('');
   };
@@ -321,7 +409,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
     const reason = rejectionReasonInput.trim() || 'Property did not meet Ileya Afrika physical verification standards.';
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('listings')
         .update({
           verification_status: 'rejected',
@@ -329,14 +417,22 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
           rejection_reason: reason,
         })
         .eq('id', rejectingListingId);
-    } catch (err) {
-      console.warn('Reject DB update error:', err);
-    }
 
-    onRejectListing(rejectingListingId, reason);
-    setDbListings((prev) => prev.filter((l) => l.id !== rejectingListingId));
-    setRejectingListingId(null);
-    setRejectionReasonInput('');
+      if (error) throw error;
+
+      onRejectListing(rejectingListingId, reason);
+      await fetchPendingListings();
+      await refreshListings();
+
+      setSuccessToast('Listing has been rejected and host notified.');
+      setTimeout(() => setSuccessToast(null), 4000);
+      setRejectingListingId(null);
+      setRejectionReasonInput('');
+    } catch (err: any) {
+      console.error('Reject DB update error:', err);
+      const errMsg = err?.message || 'Failed to reject listing.';
+      alert(`Reject Error: ${errMsg}`);
+    }
   };
 
   return (
@@ -614,24 +710,50 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
                         {/* Primary Verification Action: Opens Verification Form */}
                         <button
                           type="button"
-                          onClick={() => handleOpenVerificationModal(listing)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleOpenVerificationModal(listing);
+                          }}
                           id={`verify-property-btn-${listing.id}`}
                           className="w-full py-3 px-4 rounded-xl text-xs font-extrabold bg-[#1B4332] hover:bg-[#143427] text-[#E8A33D] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md border border-[#E8A33D]/40"
                         >
                           <ShieldCheck className="w-4.5 h-4.5 text-[#E8A33D]" />
-                          <span>Verify & Add Inspection Evidence</span>
+                          <span>Approve & Add Evidence</span>
                         </button>
 
-                        {/* Reject Button */}
+                        {/* Quick Approve Without Extra Files */}
                         <button
                           type="button"
-                          onClick={() => handleOpenRejectModal(listing.id)}
-                          id={`reject-property-btn-${listing.id}`}
-                          className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          onClick={(e) => handleQuickApprove(listing, e)}
+                          id={`quick-approve-btn-${listing.id}`}
+                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-[#FBF6EC] hover:bg-[#1B4332]/10 text-[#1B4332] flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-[#1B4332]/20"
                         >
-                          <XCircle className="w-4 h-4" />
-                          <span>Reject Listing</span>
+                          <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
+                          <span>Quick Approve (No New Files)</span>
                         </button>
+
+                        {/* Delist & Reject Buttons Row */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={(e) => handlePromptDelist(listing, e)}
+                            id={`delist-pending-btn-${listing.id}`}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-amber-800 hover:text-white hover:bg-amber-700 bg-amber-50 border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-current" />
+                            <span>Delist</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenRejectModal(listing.id, e)}
+                            id={`reject-property-btn-${listing.id}`}
+                            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            <span>Reject</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -853,13 +975,13 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin text-[#E8A33D]" />
-                      <span>Processing Upload...</span>
+                      <span>Processing Approval & Upload...</span>
                     </>
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4 text-[#E8A33D]" />
                       <span>
-                        Verify Property {selectedFiles.length > 0 ? `(${selectedFiles.length} files)` : ''}
+                        Approve & Add Evidence {selectedFiles.length > 0 ? `(${selectedFiles.length} files)` : ''}
                       </span>
                     </>
                   )}
@@ -925,6 +1047,73 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delist Confirmation Modal (Prompt Requirement #3) */}
+      {listingToDelist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14231C]/65 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#14231C] font-serif">Delist Property?</h3>
+                <p className="text-xs text-[#6B756F]">Update property status to 'delisted' in Supabase</p>
+              </div>
+            </div>
+
+            <div className="bg-[#FBF6EC] p-3 rounded-xl border border-[#1B4332]/10 mb-4 flex items-center gap-3">
+              <img
+                src={listingToDelist.photos?.[0] || listingToDelist.images?.[0] || 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=300&auto=format&fit=crop&q=80'}
+                alt={listingToDelist.title}
+                className="w-12 h-12 rounded-lg object-cover border border-[#1B4332]/10 shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <div className="min-w-0 flex-1">
+                <h4 className="font-bold text-xs text-[#14231C] truncate">{listingToDelist.title}</h4>
+                <p className="text-[11px] text-[#2D6A4F] mt-0.5">{listingToDelist.cityArea}, {listingToDelist.state}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#6B756F] leading-relaxed mb-5">
+              Are you sure you want to delist <strong>{listingToDelist.title}</strong>? The listing record will be updated to status 'delisted' in the database and hidden from guests.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDelisting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setListingToDelist(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#6B756F] hover:bg-[#1B4332]/5 hover:text-[#14231C] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDelisting}
+                onClick={(e) => handleConfirmDelist(e)}
+                id="confirm-delist-pending-btn"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 active:scale-[0.98] transition-all flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {isDelisting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Delisting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirm Delist</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

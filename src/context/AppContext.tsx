@@ -55,7 +55,9 @@ interface AppContextType {
   setListings: React.Dispatch<React.SetStateAction<PropertyListing[]>>;
   addListing: (newListing: PropertyListing) => void;
   updateListing: (id: string, updates: Partial<PropertyListing>) => void;
-  approveListing: (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => void;
+  approveListing: (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => Promise<any> | void;
+  delistListing: (id: string) => Promise<void>;
+  refreshListings: () => Promise<PropertyListing[]>;
   rejectListing: (id: string, reason: string) => void;
   deleteListing: (id: string) => void;
   toggleBookingStatus: (id: string) => void;
@@ -489,22 +491,104 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateListingInSupabase(id, updates);
   };
 
-  const approveListing = (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => {
-    const updates: Partial<PropertyListing> = {
-      status: 'approved_live',
-      isPhysicallyVerified: true,
-      verification_status: 'verified',
-      verificationStatus: 'verified',
-      verification_notes: inspectionNotes || 'Passed physical inspection for power, water, and security.',
-      verificationNotes: inspectionNotes || 'Passed physical inspection for power, water, and security.',
-      verification_evidence_urls: evidenceUrls || [],
-      verificationEvidenceUrls: evidenceUrls || [],
-    };
+  const refreshListings = async (): Promise<PropertyListing[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    setListingsState((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
-    );
-    updateListingInSupabase(id, updates);
+      if (error) {
+        console.warn('Error refreshing listings from Supabase:', error.message);
+        return listings;
+      }
+
+      if (data) {
+        const mappedListings: PropertyListing[] = data.map((row: any) => ({
+          id: row.id,
+          title: row.title || 'Verified Apartment',
+          description: row.description || '',
+          propertyType: row.property_type || 'Apartment',
+          pricePerDay: Number(row.price_per_day || row.price || 0),
+          state: row.state || 'Lagos',
+          cityArea: row.city_area || row.city || '',
+          streetAddress: row.street_address || '',
+          amenities: Array.isArray(row.amenities) ? row.amenities : [],
+          photos: Array.isArray(row.photos) && row.photos.length > 0 ? row.photos : (Array.isArray(row.images) ? row.images : []),
+          images: Array.isArray(row.images) && row.images.length > 0 ? row.images : (Array.isArray(row.photos) ? row.photos : []),
+          hostWhatsApp: row.host_whatsapp || '+2348000000000',
+          hostFullName: row.host_full_name || 'Verified Host',
+          hostEmail: row.host_email || '',
+          hostBankDetails: row.host_bank_details,
+          status: row.status || 'pending',
+          isPhysicallyVerified: row.is_physically_verified ?? (row.status === 'approved' || row.status === 'approved_live'),
+          verification_status: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+          verificationStatus: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+          verification_notes: row.verification_notes || '',
+          verificationNotes: row.verification_notes || '',
+          verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : [],
+          verificationEvidenceUrls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : [],
+          createdAt: row.created_at || new Date().toISOString(),
+          rejectionReason: row.rejection_reason,
+        }));
+
+        setListingsState(mappedListings);
+        setStoredItem(STORAGE_KEYS.LISTINGS, mappedListings);
+        return mappedListings;
+      }
+      return listings;
+    } catch (err) {
+      console.error('refreshListings error:', err);
+      return listings;
+    }
+  };
+
+  const approveListing = async (id: string, inspectionNotes?: string, evidenceUrls?: string[]): Promise<any> => {
+    const existingListing = listings.find((l) => l.id === id);
+    const existingUrls = existingListing?.verification_evidence_urls || existingListing?.verificationEvidenceUrls || [];
+    const uploadedUrls = evidenceUrls || [];
+
+    const notes = inspectionNotes || 'Passed physical inspection for power, water, and security.';
+
+    const { data, error } = await supabase
+      .from('listings')
+      .update({
+        verification_status: 'verified',
+        verification_notes: notes || null,
+        verification_evidence_urls: uploadedUrls.length > 0 ? uploadedUrls : existingUrls,
+        status: 'approved'
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Supabase approveListing error:', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      const permMsg = 'Permissions blocked the update or listing was not found.';
+      throw new Error(permMsg);
+    }
+
+    await refreshListings();
+    return data;
+  };
+
+  const delistListing = async (id: string): Promise<void> => {
+    const { error } = await supabase
+      .from('listings')
+      .update({ 
+        status: 'delisted',
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase delist error:', error);
+      throw error;
+    }
+
+    await refreshListings();
   };
 
   const rejectListing = (id: string, reason: string) => {
@@ -622,6 +706,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addListing,
         updateListing,
         approveListing,
+        delistListing,
+        refreshListings,
         rejectListing,
         deleteListing,
         toggleBookingStatus,
