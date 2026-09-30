@@ -153,7 +153,7 @@ function MainApp() {
   useEffect(() => {
     if (currentRoute.startsWith('/listing/')) {
       const listingId = currentRoute.replace('/listing/', '').split('?')[0].split('/')[0];
-      const found = listings.find((l) => l.id === listingId) || INITIAL_VERIFIED_LISTINGS.find((l) => l.id === listingId);
+      const found = listings.find((l) => l.id === listingId);
       if (found) {
         setDirectListing(found);
       } else {
@@ -342,10 +342,11 @@ function MainApp() {
     // 2. PUBLIC ROUTE: Listing Details (/listing/:id)
     if (currentRoute.startsWith('/listing/')) {
       const listingId = currentRoute.replace('/listing/', '').split('?')[0].split('/')[0];
-      const activeListing = directListing || listings.find((l) => l.id === listingId) || INITIAL_VERIFIED_LISTINGS[0];
+      const activeListing = directListing || listings.find((l) => l.id === listingId) || null;
 
       return (
         <ListingDetails
+          id={listingId}
           listing={activeListing}
           user={currentUser}
           onClose={() => navigateTo('/')}

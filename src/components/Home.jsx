@@ -5,22 +5,19 @@ import {
   Calendar,
   Users,
   CheckCircle2,
-  ShieldCheck,
   Building2,
   Loader2,
   ArrowRight,
-  Sparkles,
-  SlidersHorizontal,
   X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { NIGERIAN_STATES, INITIAL_VERIFIED_LISTINGS } from '../data/nigerianData';
+import { NIGERIAN_STATES } from '../data/nigerianData';
 import { ListingDetails } from './ListingDetails';
 
 /**
  * Public Homepage Component (Home.jsx)
- * Clean Airbnb-style homepage with extensive whitespace, localized Nigerian search hero,
- * and property grid fetching approved listings from Supabase.
+ * Connected strictly to real Supabase database.
+ * No hardcoded listings, mock arrays, or invented text/ratings.
  */
 export const Home = ({
   onSelectListing: propOnSelectListing,
@@ -40,79 +37,51 @@ export const Home = ({
     guests: '1',
   });
 
-  // Database Listings State
+  // Real Database Listings State
   const [listings, setListings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Selected Listing for Modal Details View
+  // Selected Listing for Modal Details View (if used as modal)
   const [activeModalListing, setActiveModalListing] = useState(null);
 
-  // Fetch approved listings from Supabase
+  // Strictly fetch real verified listings from Supabase
   useEffect(() => {
     let isMounted = true;
 
-    async function fetchApprovedListings() {
+    async function fetchVerifiedListings() {
       setIsLoading(true);
       setErrorMsg(null);
       try {
-        // Query listings where status === 'approved' (also supporting approved_live)
         const { data, error } = await supabase
           .from('listings')
           .select('*')
-          .or('status.eq.approved,status.eq.approved_live')
+          .eq('verification_status', 'verified')
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.warn('Supabase fetch approved listings warning:', error.message);
+          console.error('Error fetching verified listings:', error);
           if (isMounted) {
-            // Graceful fallback to verified Nigerian starter listings
-            setListings(INITIAL_VERIFIED_LISTINGS);
+            setErrorMsg(error.message);
+            setListings([]);
           }
-        } else if (data && data.length > 0) {
-          const mapped = data.map((row) => ({
-            id: row.id,
-            title: row.title || 'Verified Apartment',
-            description: row.description || '',
-            propertyType: row.property_type || 'Entire Apartment',
-            pricePerDay: Number(row.price_per_day || row.price || 0),
-            state: row.state || 'Lagos',
-            cityArea: row.city_area || row.city || '',
-            streetAddress: row.street_address || '',
-            amenities: Array.isArray(row.amenities) ? row.amenities : [],
-            photos: Array.isArray(row.photos) && row.photos.length > 0
-              ? row.photos
-              : Array.isArray(row.images) && row.images.length > 0
-              ? row.images
-              : ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80'],
-            hostWhatsApp: row.host_whatsapp || '+2348000000000',
-            hostFullName: row.host_full_name || 'Verified Host',
-            hostEmail: row.host_email || '',
-            status: row.status || 'approved',
-            isPhysicallyVerified: row.is_physically_verified ?? true,
-            verification_status: row.verification_status || 'verified',
-            verificationNotes: row.verification_notes || 'Inspected on-site for 24/7 power, borehole water, and gated security.',
-            verificationEvidenceUrls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : [],
-            rating: 4.9,
-            reviewCount: 18,
-          }));
-          if (isMounted) setListings(mapped);
-        } else {
-          // If database returns empty, use initial verified stock
-          if (isMounted) setListings(INITIAL_VERIFIED_LISTINGS);
+        } else if (isMounted) {
+          setListings(data || []);
         }
       } catch (err) {
-        console.error('Error fetching approved listings:', err);
+        console.error('Fetch exception in Home.jsx:', err);
         if (isMounted) {
-          setErrorMsg(err.message);
-          setListings(INITIAL_VERIFIED_LISTINGS);
+          setErrorMsg(err.message || 'Failed to load properties');
+          setListings([]);
         }
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
-    fetchApprovedListings();
+    fetchVerifiedListings();
 
     return () => {
       isMounted = false;
@@ -129,20 +98,23 @@ export const Home = ({
     });
   };
 
-  // Filter listings based on active search criteria
+  // Filter real listings based on active search criteria
   const filteredListings = listings.filter((item) => {
+    const itemState = item.state || '';
     if (activeFilters.state && activeFilters.state !== 'all') {
-      if (item.state.toLowerCase() !== activeFilters.state.toLowerCase()) {
+      if (itemState.toLowerCase() !== activeFilters.state.toLowerCase()) {
         return false;
       }
     }
     if (activeFilters.city) {
       const q = activeFilters.city.toLowerCase();
-      const matchCity = item.cityArea?.toLowerCase().includes(q);
-      const matchState = item.state?.toLowerCase().includes(q);
-      const matchTitle = item.title?.toLowerCase().includes(q);
-      const matchStreet = item.streetAddress?.toLowerCase().includes(q);
-      if (!matchCity && !matchState && !matchTitle && !matchStreet) return false;
+      const cityArea = (item.city_area || item.city || '').toLowerCase();
+      const title = (item.title || '').toLowerCase();
+      const street = (item.street_address || '').toLowerCase();
+      const st = itemState.toLowerCase();
+      if (!cityArea.includes(q) && !st.includes(q) && !title.includes(q) && !street.includes(q)) {
+        return false;
+      }
     }
     return true;
   });
@@ -162,8 +134,8 @@ export const Home = ({
         <div className="max-w-7xl mx-auto text-center space-y-6">
           {/* Trust Pill */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200 shadow-2xs">
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
-            <span>Physically Audited Homes • 24/7 Power Guaranteed</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+            <span>Physically Audited Homes in Nigeria</span>
           </div>
 
           {/* Headline */}
@@ -313,9 +285,11 @@ export const Home = ({
               </button>
             )}
 
-            <span className="text-xs font-semibold text-gray-600 bg-gray-50 px-3.5 py-1.5 rounded-full border border-gray-200">
-              Showing <strong>{filteredListings.length}</strong> {filteredListings.length === 1 ? 'place' : 'places'}
-            </span>
+            {!isLoading && (
+              <span className="text-xs font-semibold text-gray-600 bg-gray-50 px-3.5 py-1.5 rounded-full border border-gray-200">
+                Showing <strong>{filteredListings.length}</strong> {filteredListings.length === 1 ? 'place' : 'places'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -323,38 +297,52 @@ export const Home = ({
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3 text-gray-500">
             <Loader2 className="w-8 h-8 animate-spin text-[#1B4332]" />
-            <p className="text-sm font-medium">Loading verified properties across Nigeria...</p>
+            <p className="text-sm font-medium">Loading properties...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="py-16 px-6 text-center bg-gray-50 rounded-3xl border border-gray-100 max-w-xl mx-auto space-y-3">
+            <p className="text-sm text-rose-600 font-medium">{errorMsg}</p>
+            <p className="text-xs text-gray-500">No properties available right now</p>
           </div>
         ) : filteredListings.length === 0 ? (
-          /* Empty State */
-          <div className="py-16 px-6 text-center bg-gray-50 rounded-3xl border border-gray-100 max-w-xl mx-auto">
-            <div className="w-14 h-14 rounded-2xl bg-white text-gray-400 flex items-center justify-center mx-auto mb-4 border border-gray-200 shadow-xs">
+          /* Empty State: Strict Requirement: Show "No properties available right now" message if fetched array is empty */
+          <div className="py-16 px-6 text-center bg-gray-50 rounded-3xl border border-gray-100 max-w-xl mx-auto space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-white text-gray-400 flex items-center justify-center mx-auto mb-2 border border-gray-200 shadow-xs">
               <Building2 className="w-7 h-7" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">No properties found</h3>
-            <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
-              We couldn't find any approved listings matching your search criteria. Try selecting another state or clearing the filters.
+            <h3 className="text-lg font-bold text-gray-900">No properties available right now</h3>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              There are currently no verified properties available matching your criteria. Please check back later.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedState('');
-                setCityInput('');
-                setActiveFilters({ state: '', city: '', guests: '1' });
-              }}
-              className="mt-5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#1B4332] hover:bg-[#143427] transition-all cursor-pointer shadow-xs"
-            >
-              Reset All Filters
-            </button>
+            {(activeFilters.state || activeFilters.city) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedState('');
+                  setCityInput('');
+                  setActiveFilters({ state: '', city: '', guests: '1' });
+                }}
+                className="mt-3 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#1B4332] hover:bg-[#143427] transition-all cursor-pointer shadow-xs"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
         ) : (
-          /* Clean Airbnb-Style Listing Grid */
+          /* Map strictly over real Supabase data */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
             {filteredListings.map((listing) => {
+              // Extract real image without inventing URLs
               const primaryImage =
-                listing.photos?.[0] ||
-                listing.images?.[0] ||
-                'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80';
+                (Array.isArray(listing.photos) && listing.photos[0]) ||
+                listing.image_url ||
+                (Array.isArray(listing.images) && listing.images[0]) ||
+                (Array.isArray(listing.verification_evidence_urls) && listing.verification_evidence_urls[0]) ||
+                null;
+
+              const price = listing.price_per_day || listing.price || listing.pricePerDay || null;
+              const propertyType = listing.property_type || listing.propertyType || null;
+              const locationParts = [listing.city_area || listing.city, listing.state].filter(Boolean);
 
               return (
                 <article
@@ -363,15 +351,23 @@ export const Home = ({
                   className="group cursor-pointer rounded-2xl overflow-hidden bg-white border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all flex flex-col justify-between"
                 >
                   <div>
-                    {/* Property Image Container */}
+                    {/* Property Image Container with Fallback Block */}
                     <div className="relative aspect-4/3 w-full bg-gray-100 overflow-hidden">
-                      <img
-                        src={primaryImage}
-                        alt={listing.title}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
+                      {primaryImage ? (
+                        <img
+                          src={primaryImage}
+                          alt={listing.title || 'Property'}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      ) : (
+                        /* Grey Fallback Block for missing images (strictly no invented photos) */
+                        <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center text-gray-400 p-4">
+                          <Building2 className="w-8 h-8 text-gray-300 mb-1" />
+                          <span className="text-[11px] text-gray-400 font-medium">No photo available</span>
+                        </div>
+                      )}
 
                       {/* Verified Badge Overlay */}
                       <div className="absolute top-3 left-3">
@@ -381,41 +377,42 @@ export const Home = ({
                         </span>
                       </div>
 
-                      {/* Property Type Tag */}
-                      <div className="absolute top-3 right-3 bg-white/95 text-gray-800 text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs">
-                        {listing.propertyType || 'Apartment'}
-                      </div>
+                      {/* Property Type Tag (only rendered if present) */}
+                      {propertyType && (
+                        <div className="absolute top-3 right-3 bg-white/95 text-gray-800 text-[10px] font-semibold px-2 py-0.5 rounded-md shadow-xs">
+                          {propertyType}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Card Content */}
+                    {/* Card Content - strictly real data, no invented ratings */}
                     <div className="p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-semibold text-sm text-gray-900 line-clamp-1 group-hover:text-[#1B4332] transition-colors">
-                          {listing.title}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs font-semibold text-gray-800 shrink-0">
-                          <span className="text-[#E8A33D]">★</span>
-                          <span>{listing.rating || '4.9'}</span>
-                        </div>
-                      </div>
+                      <h3 className="font-semibold text-sm text-gray-900 line-clamp-1 group-hover:text-[#1B4332] transition-colors">
+                        {listing.title || ''}
+                      </h3>
 
-                      <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                        <span>
-                          {listing.cityArea ? `${listing.cityArea}, ` : ''}
-                          <strong>{listing.state}</strong>
-                        </span>
-                      </p>
+                      {locationParts.length > 0 && (
+                        <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>{locationParts.join(', ')}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   {/* Price Footer */}
                   <div className="p-4 pt-0 border-t border-gray-50 flex items-baseline justify-between mt-2">
                     <div>
-                      <span className="text-base font-bold font-mono text-gray-950">
-                        ₦{listing.pricePerDay.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-500 ml-1">/ night</span>
+                      {price !== null ? (
+                        <>
+                          <span className="text-base font-bold font-mono text-gray-950">
+                            ₦{Number(price).toLocaleString()}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-1">/ night</span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-400">Price on request</span>
+                      )}
                     </div>
 
                     <span className="text-xs font-semibold text-[#1B4332] group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1">
@@ -430,7 +427,7 @@ export const Home = ({
         )}
       </section>
 
-      {/* Modal View for Unauthenticated Listing Details */}
+      {/* Modal View for Listing Details if active */}
       {activeModalListing && (
         <ListingDetails
           listing={activeModalListing}
