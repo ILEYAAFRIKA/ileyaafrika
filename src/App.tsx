@@ -5,7 +5,8 @@ import { Footer } from './components/Footer';
 import { Home } from './components/Home';
 import { ListingDetails } from './components/ListingDetails';
 import { HostLanding } from './components/HostLanding';
-import { AuthPortal } from './components/AuthPortal';
+import { Login } from './components/Login';
+import { SignUp } from './components/SignUp';
 import { ForgotPassword } from './components/auth/ForgotPassword';
 import { UpdatePassword } from './components/auth/UpdatePassword';
 import { HostHeader } from './components/host/HostHeader';
@@ -377,15 +378,22 @@ function MainApp() {
       );
     }
 
-    // 6. PUBLIC ROUTE: Authentication Portal (/login or /signup)
-    if (currentRoute === '/login' || currentRoute === '/signup' || currentRoute === '/auth') {
+    // 6. PUBLIC ROUTE: Dedicated Login Page (/login)
+    if (currentRoute === '/login' || currentRoute === '/auth') {
       return (
-        <AuthPortal
-          onSuccess={handleAuthSuccess}
-          currentPath={currentRoute}
+        <Login
           onNavigate={navigateTo}
-          adminEmails={adminEmails}
-          initialSuccessMsg={toastMsg}
+          onSuccess={handleAuthSuccess}
+        />
+      );
+    }
+
+    // 7. PUBLIC ROUTE: Dedicated Registration Page (/signup)
+    if (currentRoute === '/signup' || currentRoute === '/register') {
+      return (
+        <SignUp
+          onNavigate={navigateTo}
+          onSuccess={handleAuthSuccess}
         />
       );
     }
@@ -395,12 +403,9 @@ function MainApp() {
     // -----------------------------------------------------------
     if (!isAuthenticated) {
       return (
-        <AuthPortal
-          onSuccess={handleAuthSuccess}
-          currentPath="/login"
+        <Login
           onNavigate={navigateTo}
-          adminEmails={adminEmails}
-          initialSuccessMsg="Please log in to access your dashboard"
+          onSuccess={handleAuthSuccess}
         />
       );
     }

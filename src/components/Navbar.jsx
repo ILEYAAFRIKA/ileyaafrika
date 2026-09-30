@@ -162,7 +162,7 @@ export const Navbar = ({
 
               <button
                 type="button"
-                onClick={() => handleNavigate('/login')}
+                onClick={() => handleNavigate('/signup')}
                 className="text-sm font-semibold text-white bg-[#1B4332] hover:bg-[#143427] active:scale-[0.98] px-5 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer border border-[#E8A33D]/30"
               >
                 Sign Up
@@ -314,7 +314,7 @@ export const Navbar = ({
 
               <button
                 type="button"
-                onClick={() => handleNavigate('/login')}
+                onClick={() => handleNavigate('/signup')}
                 className="w-full py-3 rounded-xl text-center font-semibold text-sm text-white bg-[#1B4332] hover:bg-[#143427] shadow-xs cursor-pointer mt-1"
               >
                 Sign Up
