@@ -63,11 +63,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // If a non-master admin somehow lands on 'admin-team', reset to pending-verifications
   const safeActiveTab = (!isMasterAdmin && activeTab === 'admin-team') ? 'pending-verifications' : activeTab;
 
+  // Strict scoping: Render ONLY listings where verification_status === 'pending'
   const pendingListings = listings.filter(
     (l) =>
-      l.verification_status === 'pending' ||
-      l.verificationStatus === 'pending' ||
-      (!l.verification_status && (l.status === 'pending_verification' || l.status === 'pending'))
+      (l.verification_status === 'pending' || l.verificationStatus === 'pending') &&
+      l.status !== 'delisted' &&
+      l.status !== 'rejected'
   );
 
   return (

@@ -84,7 +84,8 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
       const { data, error } = await supabase
         .from('listings')
         .select('*')
-        .or('verification_status.eq.pending,status.eq.pending_verification,status.eq.pending')
+        .eq('verification_status', 'pending')
+        .neq('status', 'delisted')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -136,11 +137,12 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
 
   // Merge dbListings with fallback prop to ensure immediate UI reactivity
   const activeListings = dbListings.length > 0 ? dbListings : fallbackPendingListings;
+  // Strict scoping: Render ONLY listings where verification_status === 'pending'
   const filteredPending = activeListings.filter(
     (l) =>
-      l.verification_status === 'pending' ||
-      l.verificationStatus === 'pending' ||
-      (!l.verification_status && (l.status === 'pending_verification' || l.status === 'pending'))
+      (l.verification_status === 'pending' || l.verificationStatus === 'pending') &&
+      l.status !== 'delisted' &&
+      l.status !== 'rejected'
   );
 
   // Helper to format Nigerian phone numbers for WhatsApp API
@@ -707,7 +709,7 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
                           <ExternalLink className="w-3 h-3 opacity-80" />
                         </a>
 
-                        {/* Primary Verification Action: Opens Verification Form */}
+                        {/* Primary Verification Action: Opens Verification Form with Evidence Upload */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -721,39 +723,16 @@ export const PendingVerificationsTab: React.FC<PendingVerificationsTabProps> = (
                           <span>Approve & Add Evidence</span>
                         </button>
 
-                        {/* Quick Approve Without Extra Files */}
+                        {/* Reject Property Action */}
                         <button
                           type="button"
-                          onClick={(e) => handleQuickApprove(listing, e)}
-                          id={`quick-approve-btn-${listing.id}`}
-                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-[#FBF6EC] hover:bg-[#1B4332]/10 text-[#1B4332] flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-[#1B4332]/20"
+                          onClick={(e) => handleOpenRejectModal(listing.id, e)}
+                          id={`reject-property-btn-${listing.id}`}
+                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-rose-700 hover:text-white hover:bg-rose-700 bg-rose-50 border border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
-                          <span>Quick Approve (No New Files)</span>
+                          <XCircle className="w-4 h-4" />
+                          <span>Reject Listing</span>
                         </button>
-
-                        {/* Delist & Reject Buttons Row */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={(e) => handlePromptDelist(listing, e)}
-                            id={`delist-pending-btn-${listing.id}`}
-                            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-amber-800 hover:text-white hover:bg-amber-700 bg-amber-50 border border-amber-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-current" />
-                            <span>Delist</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenRejectModal(listing.id, e)}
-                            id={`reject-property-btn-${listing.id}`}
-                            className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            <span>Reject</span>
-                          </button>
-                        </div>
                       </div>
                     </div>
                   </div>

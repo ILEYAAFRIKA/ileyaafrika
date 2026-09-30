@@ -57,6 +57,7 @@ interface AppContextType {
   updateListing: (id: string, updates: Partial<PropertyListing>) => void;
   approveListing: (id: string, inspectionNotes?: string, evidenceUrls?: string[]) => Promise<any> | void;
   delistListing: (id: string) => Promise<void>;
+  relistListing: (id: string) => Promise<void>;
   refreshListings: () => Promise<PropertyListing[]>;
   rejectListing: (id: string, reason: string) => void;
   deleteListing: (id: string) => void;
@@ -576,6 +577,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const delistListing = async (id: string): Promise<void> => {
+    // Optimistic UI state update immediately
+    setListingsState((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: 'delisted' } : item))
+    );
+
     const { error } = await supabase
       .from('listings')
       .update({ 
@@ -585,6 +591,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (error) {
       console.error('Supabase delist error:', error);
+      await refreshListings();
+      throw error;
+    }
+
+    await refreshListings();
+  };
+
+  const relistListing = async (id: string): Promise<void> => {
+    // Optimistic UI state update immediately
+    setListingsState((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, status: 'approved', isPhysicallyVerified: true }
+          : item
+      )
+    );
+
+    const { error } = await supabase
+      .from('listings')
+      .update({ 
+        status: 'approved',
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase relist error:', error);
+      await refreshListings();
       throw error;
     }
 
@@ -707,6 +740,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateListing,
         approveListing,
         delistListing,
+        relistListing,
         refreshListings,
         rejectListing,
         deleteListing,
