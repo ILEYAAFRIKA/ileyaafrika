@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AdminHeader } from './AdminHeader';
 import { PendingVerificationsTab } from './PendingVerificationsTab';
 import { AllListingsTab } from './AllListingsTab';
@@ -11,6 +11,7 @@ import {
   ListingStatus
 } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 import { ShieldCheck, Database, Activity } from 'lucide-react';
 import { SupabaseDiagnosticRoutine } from '../SupabaseDiagnosticRoutine';
 
@@ -54,6 +55,63 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     session?.isMasterAdmin === true ||
     currentAdminEmail.toLowerCase() === masterAdminEmail.toLowerCase();
 
+  // Local state for listings fetched with .neq('status', 'delisted')
+  const [fetchedListings, setFetchedListings] = useState<PropertyListing[]>([]);
+
+  // 1. Supabase data fetching function (inside useEffect): strictly excludes delisted properties
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchNonDelistedListings() {
+      try {
+        const { data, error } = await supabase
+          .from('listings')
+          .select('*')
+          .neq('status', 'delisted')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.warn('Error fetching admin listings without delisted:', error.message);
+        } else if (data && isMounted) {
+          const mapped: PropertyListing[] = data.map((row: any) => ({
+            id: row.id,
+            title: row.title || 'Verified Apartment',
+            description: row.description || '',
+            propertyType: row.property_type || 'Apartment',
+            pricePerDay: Number(row.price_per_day || row.price || 0),
+            state: row.state || 'Lagos',
+            cityArea: row.city_area || row.city || '',
+            streetAddress: row.street_address || '',
+            amenities: Array.isArray(row.amenities) ? row.amenities : [],
+            photos: Array.isArray(row.photos) && row.photos.length > 0 ? row.photos : (Array.isArray(row.images) ? row.images : []),
+            images: Array.isArray(row.images) && row.images.length > 0 ? row.images : (Array.isArray(row.photos) ? row.photos : []),
+            hostWhatsApp: row.host_whatsapp || '',
+            hostFullName: row.host_full_name || 'Verified Host',
+            hostEmail: row.host_email || '',
+            status: row.status || 'pending',
+            isPhysicallyVerified: row.is_physically_verified ?? (row.status === 'approved' || row.status === 'approved_live'),
+            verification_status: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+            verificationStatus: row.verification_status || (row.status === 'approved' || row.status === 'approved_live' ? 'verified' : 'pending'),
+            verification_notes: row.verification_notes || '',
+            verificationNotes: row.verification_notes || '',
+            verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : [],
+            createdAt: row.created_at || new Date().toISOString(),
+            rejectionReason: row.rejection_reason,
+          }));
+          setFetchedListings(mapped);
+        }
+      } catch (err) {
+        console.error('Exception fetching non-delisted admin listings:', err);
+      }
+    }
+
+    fetchNonDelistedListings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Manual trigger for Supabase health check
   const handleRunDiagnostics = () => {
     setShowDiagnosticsModal(true);
@@ -63,13 +121,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // If a non-master admin somehow lands on 'admin-team', reset to pending-verifications
   const safeActiveTab = (!isMasterAdmin && activeTab === 'admin-team') ? 'pending-verifications' : activeTab;
 
-  // Strict scoping: Render ONLY listings where verification_status === 'pending'
-  const pendingListings = listings.filter(
-    (l) =>
-      (l.verification_status === 'pending' || l.verificationStatus === 'pending') &&
-      l.status !== 'delisted' &&
-      l.status !== 'rejected'
-  );
+  // 2. Client-Side Filter (Fallback):
+  // Ensure the array explicitly filters out delisted items: listings.filter(listing => listing.status !== 'delisted')
+  const activeListings = useMemo(() => {
+    const source = fetchedListings.length > 0 ? fetchedListings : (Array.isArray(listings) ? listings : []);
+    return source.filter((listing) => listing && listing.status !== 'delisted');
+  }, [fetchedListings, listings]);
+
+  // Strict Dynamic Counts matching user instructions:
+  // For "All Listings": activeListings.length (strictly non-delisted)
+  // For "Pending Verifications": activeListings.filter(l => l.verification_status === 'pending').length
+  const pendingListings = useMemo(() => {
+    return activeListings.filter(
+      (listing) =>
+        (listing.verification_status === 'pending' ||
+        listing.verificationStatus === 'pending') &&
+        listing.status !== 'rejected'
+    );
+  }, [activeListings]);
+
+  // 4. Sync Tab Counts:
+  // Ensure the number displayed on the "All Listings" tab accurately counts only properties that are NOT delisted
+  const pendingCount = pendingListings.length;
+  const totalListingsCount = activeListings.length;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col font-sans">
@@ -78,8 +152,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         activeTab={safeActiveTab}
         onSelectTab={setActiveTab}
         session={session}
-        pendingCount={pendingListings.length}
-        totalListingsCount={listings.length}
+        pendingCount={pendingCount}
+        totalListingsCount={totalListingsCount}
         adminCount={adminEmails.length}
         bookingsCount={myBookings.length}
         isMasterAdmin={isMasterAdmin}
@@ -132,9 +206,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {safeActiveTab === 'all-listings' && (
           <AllListingsTab
-            listings={listings}
+            listings={activeListings}
             onToggleBookingStatus={onToggleBookingStatus}
-            onDeleteListing={onDeleteListing}
+            onDeleteListing={(id) => {
+              setFetchedListings((prev) => prev.filter((item) => item.id !== id));
+              onDeleteListing(id);
+            }}
             onUpdateListingStatus={onUpdateListingStatus}
           />
         )}

@@ -57,6 +57,67 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   // Bookings state for Guest Dashboard
   const [bookings, setBookings] = useState<GuestBooking[]>(() => contextBookings || []);
 
+  // Real-time verified and non-delisted listings state
+  const [fetchedListings, setFetchedListings] = useState<PropertyListing[]>([]);
+  const [isLoadingListings, setIsLoadingListings] = useState<boolean>(true);
+
+  // Strictly fetch active, approved, and verified listings (filtering out delisted)
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchActiveVerifiedListings() {
+      setIsLoadingListings(true);
+      try {
+        const { data, error } = await supabase
+          .from('listings')
+          .select('*')
+          .eq('verification_status', 'verified')
+          .neq('status', 'delisted')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.warn('Error fetching active verified listings:', error.message);
+        } else if (data && isMounted) {
+          const mapped: PropertyListing[] = data.map((row: any) => ({
+            id: row.id,
+            title: row.title || 'Verified Apartment',
+            description: row.description || '',
+            propertyType: row.property_type || 'Apartment',
+            pricePerDay: Number(row.price_per_day || row.price || 0),
+            state: row.state || 'Lagos',
+            cityArea: row.city_area || row.city || '',
+            streetAddress: row.street_address || '',
+            amenities: Array.isArray(row.amenities) ? row.amenities : [],
+            photos: Array.isArray(row.photos) && row.photos.length > 0 ? row.photos : (Array.isArray(row.images) ? row.images : []),
+            images: Array.isArray(row.images) && row.images.length > 0 ? row.images : (Array.isArray(row.photos) ? row.photos : []),
+            hostWhatsApp: row.host_whatsapp || '',
+            hostFullName: row.host_full_name || 'Verified Host',
+            hostEmail: row.host_email || '',
+            status: row.status || 'approved',
+            isPhysicallyVerified: row.is_physically_verified ?? true,
+            verification_status: row.verification_status || 'verified',
+            verificationStatus: row.verification_status || 'verified',
+            verification_notes: row.verification_notes || '',
+            verificationNotes: row.verification_notes || '',
+            verification_evidence_urls: Array.isArray(row.verification_evidence_urls) ? row.verification_evidence_urls : [],
+            createdAt: row.created_at || new Date().toISOString(),
+          }));
+          setFetchedListings(mapped);
+        }
+      } catch (err) {
+        console.error('Exception fetching active verified listings:', err);
+      } finally {
+        if (isMounted) setIsLoadingListings(false);
+      }
+    }
+
+    fetchActiveVerifiedListings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Review System State
   const [reviewedBookingIds, setReviewedBookingIds] = useState<Set<string>>(new Set());
   const [activeReviewBooking, setActiveReviewBooking] = useState<GuestBooking | null>(null);
@@ -284,13 +345,20 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
     };
   }, [searchCheckInDate, searchCheckOutDate, bookings]);
 
-  // STRICT REQUIREMENT: Only show listings where status === 'approved_live' or 'approved'
-  const approvedListings = useMemo(() => {
-    if (!Array.isArray(listings)) return [];
-    return listings.filter(
-      (item) => item && (item.status === 'approved_live' || item.status === 'approved' || !item.status)
+  // Client-Side Fallback: strictly guarantee active and verified only, filtering out delisted
+  const displayListings = useMemo(() => {
+    const rawListings = fetchedListings.length > 0 ? fetchedListings : (Array.isArray(listings) ? listings : []);
+    return rawListings.filter(
+      (item) => item && item.status !== 'delisted' && (item.verification_status === 'verified' || item.verificationStatus === 'verified' || item.status === 'approved' || item.status === 'approved_live')
     );
-  }, [listings]);
+  }, [fetchedListings, listings]);
+
+  // STRICT REQUIREMENT: Only show listings where status !== 'delisted' and verified/approved
+  const approvedListings = useMemo(() => {
+    return displayListings.filter(
+      (item) => item && item.status !== 'delisted' && (item.status === 'approved_live' || item.status === 'approved' || item.verification_status === 'verified')
+    );
+  }, [displayListings]);
 
   // Derived Cities/Areas based on selected state from approved listings
   const availableCities = useMemo(() => {

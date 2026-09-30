@@ -31,7 +31,6 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
   const [selectedState, setSelectedState] = useState<string>('all');
   const [citySearch, setCitySearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showDelisted, setShowDelisted] = useState<boolean>(false);
   const [selectedDetailsListing, setSelectedDetailsListing] = useState<PropertyListing | null>(null);
 
   // Delist state & processing
@@ -40,11 +39,12 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
   const [delistError, setDelistError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // Total count of delisted items
-  const delistedCount = listings.filter((l) => l.status === 'delisted').length;
+  // 2. Client-Side Filter (Fallback):
+  // Explicitly filter out delisted items from the All Listings directory view
+  const nonDelistedListings = listings.filter((listing) => listing && listing.status !== 'delisted');
 
-  // Filter listings by State, City Area/Title, Status, and Delisted Visibility Toggle
-  const filteredListings = listings.filter((item) => {
+  // Filter listings by State, City Area/Title, and Status
+  const filteredListings = nonDelistedListings.filter((item) => {
     // 1. State filter
     if (selectedState !== 'all' && item.state.toLowerCase() !== selectedState.toLowerCase()) {
       return false;
@@ -65,17 +65,9 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
         if (item.status !== 'approved_live' && item.status !== 'approved') return false;
       } else if (statusFilter === 'pending_verification' || statusFilter === 'pending') {
         if (item.status !== 'pending_verification' && item.status !== 'pending') return false;
-      } else if (statusFilter === 'delisted') {
-        if (item.status !== 'delisted') return false;
       } else if (statusFilter === 'rejected') {
         if (item.status !== 'rejected') return false;
       } else if (item.status !== statusFilter) {
-        return false;
-      }
-    } else {
-      // When statusFilter is 'all': default to showing only active listings,
-      // unless "Show Delisted Listings" checkbox toggle is checked
-      if (!showDelisted && item.status === 'delisted') {
         return false;
       }
     }
@@ -98,10 +90,8 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
     setIsProcessing(true);
     setDelistError(null);
 
-    // Optimistic UI state update: immediately reflect delisted status in local state
-    setListings((prev) =>
-      prev.map((item) => (item.id === listingId ? { ...item, status: 'delisted' } : item))
-    );
+    // Optimistic UI state update: immediately remove delisted property from view
+    setListings((prev) => prev.filter((item) => item.id !== listingId));
 
     try {
       const { error } = await supabase
@@ -117,72 +107,18 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
         throw error;
       }
 
-      // Re-trigger fetch query / refresh to synchronize state
-      await refreshListings();
-
-      setSuccessToast(`Successfully delisted "${listingTitle}". Property status is now 'delisted'.`);
+      setSuccessToast(`Successfully delisted "${listingTitle}". Property has been removed.`);
       setTimeout(() => setSuccessToast(null), 4000);
       setListingToDelete(null);
 
       if (selectedDetailsListing?.id === listingId) {
-        setSelectedDetailsListing((prev) => (prev ? { ...prev, status: 'delisted' } : null));
+        setSelectedDetailsListing(null);
       }
     } catch (err: any) {
       console.error('Delist failed:', err);
       const errMsg = err?.message || 'Failed to delist property. Check Supabase database permissions.';
       setDelistError(errMsg);
       alert(`Delist Failed: ${errMsg}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // 2. Optimistic Reactivate / Relist Handler for delisted properties
-  const handleConfirmRelist = async (listing: PropertyListing, e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    const listingId = listing.id;
-    setIsProcessing(true);
-
-    // Optimistic UI state update: immediately reflect active/approved status in local state
-    setListings((prev) =>
-      prev.map((item) =>
-        item.id === listingId
-          ? {
-              ...item,
-              status: 'approved',
-              isPhysicallyVerified: true,
-            }
-          : item
-      )
-    );
-
-    try {
-      const { error } = await supabase
-        .from('listings')
-        .update({ 
-          status: 'approved',
-        })
-        .eq('id', listingId);
-
-      if (error) {
-        // Revert if failed
-        await refreshListings();
-        throw error;
-      }
-
-      // Re-trigger fetch query
-      await refreshListings();
-
-      setSuccessToast(`Successfully reactivated "${listing.title}". Property is now active and live.`);
-      setTimeout(() => setSuccessToast(null), 4000);
-
-      if (selectedDetailsListing?.id === listingId) {
-        setSelectedDetailsListing((prev) => (prev ? { ...prev, status: 'approved' } : null));
-      }
-    } catch (err: any) {
-      console.error('Reactivate failed:', err);
-      const errMsg = err?.message || 'Failed to reactivate property. Check Supabase database permissions.';
-      alert(`Reactivate Failed: ${errMsg}`);
     } finally {
       setIsProcessing(false);
     }
@@ -236,7 +172,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
         </div>
 
         {/* Filter Controls Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-[#1B4332]/10 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#1B4332]/10 items-end">
           {/* Nigerian State Filter */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B756F] mb-1">
@@ -252,9 +188,9 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                 onChange={(e) => setSelectedState(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/15 text-[#14231C] font-medium focus:outline-none focus:ring-2 focus:ring-[#1B4332] cursor-pointer"
               >
-                <option value="all">All States ({listings.length})</option>
+                <option value="all">All States ({nonDelistedListings.length})</option>
                 {NIGERIAN_STATES.map((st) => {
-                  const count = listings.filter((l) => l.state.toLowerCase() === st.toLowerCase()).length;
+                  const count = nonDelistedListings.filter((l) => l.state.toLowerCase() === st.toLowerCase()).length;
                   return (
                     <option key={st} value={st}>
                       {st} {count > 0 ? `(${count})` : ''}
@@ -303,41 +239,15 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                 <option value="all">All Statuses</option>
                 <option value="approved_live">Approved & Live</option>
                 <option value="pending_verification">Pending Physical Inspection</option>
-                <option value="delisted">Delisted</option>
                 <option value="rejected">Rejected</option>
               </select>
             </div>
-          </div>
-
-          {/* Delisted Filter Toggle (Defaults to showing only active listings) */}
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6B756F] mb-1">
-              Visibility Filter
-            </label>
-            <label
-              htmlFor="show-delisted-toggle-checkbox"
-              className="flex items-center gap-2.5 px-3 py-2 text-xs bg-[#FBF6EC] rounded-xl border border-[#1B4332]/15 text-[#14231C] font-medium hover:bg-[#1B4332]/5 cursor-pointer transition-colors"
-            >
-              <input
-                id="show-delisted-toggle-checkbox"
-                type="checkbox"
-                checked={showDelisted}
-                onChange={(e) => setShowDelisted(e.target.checked)}
-                className="w-4 h-4 rounded text-[#1B4332] accent-[#1B4332] cursor-pointer"
-              />
-              <span className="truncate">Show Delisted Listings</span>
-              {delistedCount > 0 && (
-                <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-stone-200 text-stone-700 font-mono">
-                  {delistedCount}
-                </span>
-              )}
-            </label>
           </div>
         </div>
       </div>
 
       {/* Directory Grid / Empty States */}
-      {listings.length === 0 ? (
+      {nonDelistedListings.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 sm:p-16 text-center border border-[#1B4332]/10 shadow-xs">
           <div className="w-16 h-16 rounded-2xl bg-[#1B4332]/5 text-[#1B4332] flex items-center justify-center mx-auto mb-4 border border-[#1B4332]/10">
             <Building2 className="w-8 h-8 text-[#2D6A4F]" />
@@ -356,27 +266,15 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
             No Listings Match Your Filters
           </h4>
           <p className="text-xs text-[#6B756F] max-w-sm mx-auto mt-1">
-            {!showDelisted && delistedCount > 0
-              ? 'Active listings matching these criteria were not found. Try toggling "Show Delisted Listings" or resetting filters.'
-              : 'Try adjusting your state selection, search keywords, or status filter.'}
+            Try adjusting your state selection, search keywords, or verification status filter.
           </p>
           <div className="flex items-center justify-center gap-2 mt-3">
-            {!showDelisted && delistedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowDelisted(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#1B4332] hover:bg-[#143427] transition-all cursor-pointer shadow-xs"
-              >
-                Show Delisted ({delistedCount})
-              </button>
-            )}
             <button
               type="button"
               onClick={() => {
                 setSelectedState('all');
                 setCitySearch('');
                 setStatusFilter('all');
-                setShowDelisted(false);
               }}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-[#1B4332] bg-[#FBF6EC] hover:bg-[#1B4332]/10 transition-all cursor-pointer border border-[#1B4332]/10"
             >
@@ -387,7 +285,6 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredListings.map((listing) => {
-            const isDelisted = listing.status === 'delisted';
             const isVerified =
               listing.verification_status === 'verified' ||
               listing.verificationStatus === 'verified' ||
@@ -402,11 +299,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
             return (
               <div
                 key={listing.id}
-                className={`bg-white rounded-2xl border transition-all overflow-hidden flex flex-col justify-between ${
-                  isDelisted
-                    ? 'border-stone-300 opacity-90 bg-stone-50/50'
-                    : 'border-[#1B4332]/15 shadow-xs hover:shadow-md'
-                }`}
+                className="bg-white rounded-2xl border border-[#1B4332]/15 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between"
               >
                 {/* Top Section: Photo & Status Badges */}
                 <div>
@@ -416,7 +309,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                         src={listing.photos?.[0] || listing.images?.[0]}
                         alt={listing.title}
                         referrerPolicy="no-referrer"
-                        className={`w-full h-full object-cover ${isDelisted ? 'grayscale-[35%]' : ''}`}
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#6B756F]">
@@ -427,14 +320,9 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
 
-                    {/* Status Badge (Prompt Requirement #1) */}
+                    {/* Status Badge */}
                     <div className="absolute top-3 left-3 flex flex-wrap gap-1">
-                      {isDelisted ? (
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-stone-700/95 text-white flex items-center gap-1 shadow-sm border border-stone-600">
-                          <XCircle className="w-3 h-3 text-red-400" />
-                          <span>Delisted</span>
-                        </span>
-                      ) : isVerified ? (
+                      {isVerified ? (
                         <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-700 text-white flex items-center gap-1 shadow-sm border border-emerald-600">
                           <CheckCircle2 className="w-3 h-3 text-emerald-200" />
                           <span>Verified</span>
@@ -488,23 +376,13 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                           Status & Availability
                         </span>
                         <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              isDelisted ? 'bg-stone-400' : 'bg-[#2D6A4F]'
-                            }`}
-                          />
-                          <span
-                            className={`text-xs font-bold ${
-                              isDelisted ? 'text-stone-500' : 'text-[#2D6A4F]'
-                            }`}
-                          >
-                            {isDelisted ? 'Inactive / Delisted' : 'Calendar-Managed'}
-                          </span>
+                          <span className="w-2 h-2 rounded-full bg-[#2D6A4F]" />
+                          <span className="text-xs font-bold text-[#2D6A4F]">Calendar-Managed</span>
                         </div>
                       </div>
 
                       <span className="text-[10px] font-bold text-[#1B4332] bg-white px-2.5 py-1 rounded-lg border border-[#1B4332]/10 shadow-2xs font-mono">
-                        {isDelisted ? 'Hidden' : 'Date-based'}
+                        Date-based
                       </span>
                     </div>
 
@@ -518,7 +396,7 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Footer Action Buttons (Strictly Scoped: Contextual Delist / Reactivate, NO Approve & Add Evidence) */}
+                {/* Footer Action Buttons */}
                 <div className="p-4 pt-0 flex items-center gap-2">
                   <button
                     type="button"
@@ -533,32 +411,17 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                     <span>View Details</span>
                   </button>
 
-                  {/* Contextual Action Button: Delist for active, Reactivate for delisted */}
-                  {isDelisted ? (
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={(e) => handleConfirmRelist(listing, e)}
-                      id={`relist-btn-${listing.id}`}
-                      title="Reactivate and restore this property"
-                      className="py-2 px-3.5 rounded-xl text-xs font-bold text-emerald-800 hover:text-white hover:bg-emerald-700 bg-emerald-50 border border-emerald-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reactivate</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={(e) => handlePromptDelete(listing, e)}
-                      id={`delist-btn-${listing.id}`}
-                      title="Delist Property"
-                      className="py-2 px-3.5 rounded-xl text-xs font-semibold text-rose-800 hover:text-white hover:bg-rose-700 bg-rose-50 border border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-current" />
-                      <span>Delist</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={(e) => handlePromptDelete(listing, e)}
+                    id={`delist-btn-${listing.id}`}
+                    title="Delist Property"
+                    className="py-2 px-3.5 rounded-xl text-xs font-semibold text-rose-800 hover:text-white hover:bg-rose-700 bg-rose-50 border border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-current" />
+                    <span>Delist</span>
+                  </button>
                 </div>
               </div>
             );
@@ -656,12 +519,8 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#2D6A4F]">
                     Property Specification • ID: {selectedDetailsListing.id}
                   </span>
-                  {selectedDetailsListing.status === 'delisted' ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-700 text-white">
-                      Delisted
-                    </span>
-                  ) : selectedDetailsListing.verification_status === 'verified' ||
-                    selectedDetailsListing.status === 'approved' ? (
+                  {selectedDetailsListing.verification_status === 'verified' ||
+                  selectedDetailsListing.status === 'approved' ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-700 text-white">
                       Verified
                     </span>
@@ -754,35 +613,22 @@ export const AllListingsTab: React.FC<AllListingsTabProps> = ({
               </p>
             </div>
 
-            {/* Modal Actions (Contextual Delist / Reactivate, NO Approve & Add Evidence) */}
+            {/* Modal Actions */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#1B4332]/10">
               <div className="flex items-center gap-2">
-                {selectedDetailsListing.status === 'delisted' ? (
-                  <button
-                    type="button"
-                    disabled={isProcessing}
-                    onClick={(e) => handleConfirmRelist(selectedDetailsListing, e)}
-                    id={`relist-modal-btn-${selectedDetailsListing.id}`}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-700 hover:text-white border border-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reactivate Property</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isProcessing}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handlePromptDelete(selectedDetailsListing, e);
-                    }}
-                    id={`delist-modal-btn-${selectedDetailsListing.id}`}
-                    className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-700 hover:text-white border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delist Property</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePromptDelete(selectedDetailsListing, e);
+                  }}
+                  id={`delist-modal-btn-${selectedDetailsListing.id}`}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-700 hover:text-white border border-rose-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delist Property</span>
+                </button>
               </div>
 
               <button

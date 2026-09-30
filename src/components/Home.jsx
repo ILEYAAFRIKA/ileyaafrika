@@ -57,6 +57,7 @@ export const Home = ({
           .from('listings')
           .select('*')
           .eq('verification_status', 'verified')
+          .neq('status', 'delisted')
           .order('created_at', { ascending: false });
 
         if (error) {
@@ -98,8 +99,13 @@ export const Home = ({
     });
   };
 
+  // Client-Side Fallback: guarantee only non-delisted and verified listings
+  const displayListings = listings.filter(
+    (item) => item && item.status !== 'delisted' && (item.verification_status === 'verified' || item.verificationStatus === 'verified')
+  );
+
   // Filter real listings based on active search criteria
-  const filteredListings = listings.filter((item) => {
+  const filteredListings = displayListings.filter((item) => {
     const itemState = item.state || '';
     if (activeFilters.state && activeFilters.state !== 'all') {
       if (itemState.toLowerCase() !== activeFilters.state.toLowerCase()) {

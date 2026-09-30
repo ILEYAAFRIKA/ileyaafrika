@@ -83,12 +83,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           >
             <ClipboardList className="w-4 h-4" />
             <span>Pending Verifications</span>
+            <span className="text-[10px] text-gray-400 font-mono">({pendingCount})</span>
             {pendingCount > 0 && (
               <span
                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === 'pending-verifications'
                     ? 'bg-[#1B4332]/10 text-[#1B4332]'
-                    : 'bg-gray-100 text-gray-600'
+                    : 'bg-amber-100 text-amber-800'
                 }`}
               >
                 {pendingCount}
