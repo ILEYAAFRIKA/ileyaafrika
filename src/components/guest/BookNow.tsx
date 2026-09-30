@@ -727,20 +727,47 @@ export const BookNow: React.FC<BookNowProps> = ({
               <DatePicker
                 selected={checkInDate}
                 onChange={(date: Date | null) => {
+                  setErrorMessage(null);
                   if (date) {
                     const dStr = formatDateToYYYYMMDD(date);
                     if (disabledDateStrings.has(dStr)) {
-                      const msg = 'Sorry, those dates were just booked.';
+                      const msg = 'Selected check-in date is already booked.';
                       showToast(msg);
                       setErrorMessage(msg);
                       return;
                     }
-                  }
-                  setCheckInDate(date);
-                  if (date && checkOutDate && date >= checkOutDate) {
-                    const nextDay = new Date(date);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    setCheckOutDate(nextDay);
+                    setCheckInDate(date);
+
+                    // If existing checkout is <= new checkin or overlaps with booked date, adjust or reset
+                    if (checkOutDate) {
+                      if (checkOutDate <= date) {
+                        const nextDay = new Date(date);
+                        nextDay.setDate(nextDay.getDate() + 1);
+                        const nextDayStr = formatDateToYYYYMMDD(nextDay);
+                        if (!disabledDateStrings.has(nextDayStr)) {
+                          setCheckOutDate(nextDay);
+                        } else {
+                          setCheckOutDate(null);
+                        }
+                      } else {
+                        // Check if new range crosses any booked date
+                        const cur = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+                        const stop = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate(), 0, 0, 0, 0);
+                        let hasOverlap = false;
+                        while (cur < stop) {
+                          if (disabledDateStrings.has(formatDateToYYYYMMDD(cur))) {
+                            hasOverlap = true;
+                            break;
+                          }
+                          cur.setDate(cur.getDate() + 1);
+                        }
+                        if (hasOverlap) {
+                          setCheckOutDate(null);
+                        }
+                      }
+                    }
+                  } else {
+                    setCheckInDate(null);
                   }
                 }}
                 selectsStart
@@ -751,7 +778,7 @@ export const BookNow: React.FC<BookNowProps> = ({
                 filterDate={(date: Date) => !disabledDateStrings.has(formatDateToYYYYMMDD(date))}
                 excludeDateIntervals={bookedIntervals}
                 placeholderText="Select Check-in"
-                className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs"
+                className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs cursor-pointer"
                 dateFormat="MMM d, yyyy"
               />
             </div>
@@ -766,16 +793,45 @@ export const BookNow: React.FC<BookNowProps> = ({
               <DatePicker
                 selected={checkOutDate}
                 onChange={(date: Date | null) => {
+                  setErrorMessage(null);
                   if (date) {
                     const dStr = formatDateToYYYYMMDD(date);
                     if (disabledDateStrings.has(dStr)) {
-                      const msg = 'Sorry, those dates were just booked.';
+                      const msg = 'Selected check-out date is already booked.';
                       showToast(msg);
                       setErrorMessage(msg);
                       return;
                     }
+                    // Validation 1: User MUST NOT be able to select Check-out date earlier or equal to Check-in date
+                    if (checkInDate && date <= checkInDate) {
+                      const msg = 'Check-out date must be after Check-in date.';
+                      showToast(msg);
+                      setErrorMessage(msg);
+                      return;
+                    }
+                    // Validation 2: User MUST NOT be able to select a date range that overlaps with or includes an already booked date
+                    if (checkInDate) {
+                      const cur = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate(), 0, 0, 0, 0);
+                      const stop = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+                      let hasOverlap = false;
+                      while (cur < stop) {
+                        if (disabledDateStrings.has(formatDateToYYYYMMDD(cur))) {
+                          hasOverlap = true;
+                          break;
+                        }
+                        cur.setDate(cur.getDate() + 1);
+                      }
+                      if (hasOverlap) {
+                        const msg = 'Selected date range overlaps with an existing booking.';
+                        showToast(msg);
+                        setErrorMessage(msg);
+                        return;
+                      }
+                    }
+                    setCheckOutDate(date);
+                  } else {
+                    setCheckOutDate(null);
                   }
-                  setCheckOutDate(date);
                 }}
                 selectsEnd
                 startDate={checkInDate}
@@ -786,37 +842,17 @@ export const BookNow: React.FC<BookNowProps> = ({
                 filterDate={(date: Date) => {
                   const dStr = formatDateToYYYYMMDD(date);
                   if (disabledDateStrings.has(dStr)) return false;
+                  if (checkInDate && date <= checkInDate) return false;
                   if (maxAllowedCheckOutDate && date > maxAllowedCheckOutDate) return false;
                   return true;
                 }}
                 excludeDateIntervals={bookedIntervals}
                 placeholderText="Select Check-out"
-                className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs"
+                className="w-full text-xs font-medium py-2.5 px-3 bg-white rounded-xl border border-[#1B4332]/20 text-[#14231C] focus:outline-none focus:ring-2 focus:ring-[#1B4332] shadow-xs cursor-pointer"
                 dateFormat="MMM d, yyyy"
               />
             </div>
           </div>
-        </div>
-
-        {/* Datepicker Availability Legend */}
-        <div className="flex items-center justify-between text-[11px] text-[#6B756F] px-1 bg-white/60 p-2 rounded-xl border border-[#1B4332]/10">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" />
-            <span className="text-[#14231C] font-medium">Available</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-gray-400" />
-            <span className="line-through text-gray-500">Grayed out = Booked</span>
-          </div>
-          {disabledDates.length > 0 ? (
-            <span className="font-mono text-[#1B4332] font-bold text-[10px] bg-[#1B4332]/10 px-2 py-0.5 rounded-md">
-              {disabledDates.length} Date{disabledDates.length > 1 ? 's' : ''} Blocked
-            </span>
-          ) : (
-            <span className="text-emerald-700 font-medium text-[10px]">
-              Open Dates
-            </span>
-          )}
         </div>
 
         {/* Guests Count Selector */}

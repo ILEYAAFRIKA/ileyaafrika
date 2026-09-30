@@ -91,12 +91,57 @@ export const ListingDetails = ({
   const [showAllPhotosModal, setShowAllPhotosModal] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isBookedSuccess, setIsBookedSuccess] = useState(false);
+  const [bookedDatesSet, setBookedDatesSet] = useState(new Set());
+  const [dateError, setDateError] = useState(null);
 
   // In-platform generic host message modal (NEVER exposes raw phone number)
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
   const [inquiryMessage, setInquiryMessage] = useState('');
   const [inquirySent, setInquirySent] = useState(false);
   const [isSendingInquiry, setIsSendingInquiry] = useState(false);
+
+  // Fetch booked dates from Supabase for this property
+  useEffect(() => {
+    if (!targetId) return;
+    let isMounted = true;
+
+    async function fetchBookingsForListing() {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('check_in_date, check_out_date, status, payment_status')
+          .eq('listing_id', targetId)
+          .or('status.eq.confirmed,status.eq.approved,payment_status.eq.completed');
+
+        if (!error && data && isMounted) {
+          const blocked = new Set();
+          data.forEach((b) => {
+            const inDate = b.check_in_date;
+            const outDate = b.check_out_date;
+            if (inDate && outDate) {
+              const start = new Date(inDate);
+              const end = new Date(outDate);
+              if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                const cur = new Date(start);
+                while (cur <= end) {
+                  blocked.add(cur.toISOString().split('T')[0]);
+                  cur.setDate(cur.getDate() + 1);
+                }
+              }
+            }
+          });
+          setBookedDatesSet(blocked);
+        }
+      } catch (err) {
+        console.warn('Could not load booked dates in ListingDetails:', err);
+      }
+    }
+
+    fetchBookingsForListing();
+    return () => {
+      isMounted = false;
+    };
+  }, [targetId]);
 
   // Strict Supabase fetch using .single() based on URL parameter / ID
   useEffect(() => {
@@ -233,11 +278,12 @@ export const ListingDetails = ({
   // Calculate nights and pure base pricing (NO SERVICE FEES)
   const calculateNights = () => {
     try {
+      if (!checkInDate || !checkOutDate) return 1;
       const start = new Date(checkInDate);
       const end = new Date(checkOutDate);
       const diffTime = end.getTime() - start.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 ? diffDays : 1;
+      return diffDays > 0 ? diffDays : 0;
     } catch {
       return 1;
     }
@@ -245,11 +291,88 @@ export const ListingDetails = ({
 
   const nights = calculateNights();
   const ratePerNight = Number(listing.price_per_day || listing.price || listing.pricePerDay || 0);
-  const totalAmount = ratePerNight * nights; // Pure nightly rate * nights, NO added service fee
+  const totalAmount = ratePerNight * Math.max(1, nights); // Pure nightly rate * nights, NO added service fee
+
+  const minCheckInDate = new Date().toISOString().split('T')[0];
+  const minCheckOutDate = checkInDate
+    ? new Date(new Date(checkInDate).getTime() + 86400000).toISOString().split('T')[0]
+    : minCheckInDate;
+
+  const handleCheckInDateChange = (val) => {
+    setDateError(null);
+    setCheckInDate(val);
+    if (!val) return;
+    if (bookedDatesSet.has(val)) {
+      setDateError('Selected check-in date is already booked.');
+      return;
+    }
+    if (checkOutDate) {
+      if (checkOutDate <= val) {
+        const nextDay = new Date(new Date(val).getTime() + 86400000).toISOString().split('T')[0];
+        setCheckOutDate(nextDay);
+      } else {
+        const cur = new Date(val);
+        const end = new Date(checkOutDate);
+        let overlaps = false;
+        while (cur < end) {
+          const key = cur.toISOString().split('T')[0];
+          if (bookedDatesSet.has(key)) {
+            overlaps = true;
+            break;
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+        if (overlaps) {
+          setDateError('Selected date range overlaps with an existing booking.');
+        }
+      }
+    }
+  };
+
+  const handleCheckOutDateChange = (val) => {
+    setDateError(null);
+    if (!val) {
+      setCheckOutDate('');
+      return;
+    }
+    // Validation 1: Check-out date must not be earlier or equal to check-in date
+    if (checkInDate && val <= checkInDate) {
+      setDateError('Check-out date must be after check-in date.');
+      return;
+    }
+    // Validation 2: Date range must not overlap with already booked dates
+    if (checkInDate) {
+      const cur = new Date(checkInDate);
+      const end = new Date(val);
+      let overlaps = false;
+      while (cur < end) {
+        const key = cur.toISOString().split('T')[0];
+        if (bookedDatesSet.has(key)) {
+          overlaps = true;
+          break;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+      if (overlaps) {
+        setDateError('Selected date range overlaps with an existing booking.');
+        return;
+      }
+    }
+    setCheckOutDate(val);
+  };
 
   // Strict Authentication Guard on Booking
   const handleBookNow = (e) => {
     if (e) e.preventDefault();
+
+    if (dateError) {
+      alert(dateError);
+      return;
+    }
+    if (!checkInDate || !checkOutDate || checkOutDate <= checkInDate) {
+      alert('Please select valid check-in and check-out dates.');
+      return;
+    }
 
     const currentUser = getLoggedInUser();
     // If not logged in: alert and redirect to /login
@@ -584,7 +707,8 @@ export const ListingDetails = ({
                       <input
                         type="date"
                         value={checkInDate}
-                        onChange={(e) => setCheckInDate(e.target.value)}
+                        min={minCheckInDate}
+                        onChange={(e) => handleCheckInDateChange(e.target.value)}
                         className="w-full bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer mt-0.5"
                       />
                     </div>
@@ -595,7 +719,8 @@ export const ListingDetails = ({
                       <input
                         type="date"
                         value={checkOutDate}
-                        onChange={(e) => setCheckOutDate(e.target.value)}
+                        min={minCheckOutDate}
+                        onChange={(e) => handleCheckOutDateChange(e.target.value)}
                         className="w-full bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer mt-0.5"
                       />
                     </div>
@@ -618,6 +743,13 @@ export const ListingDetails = ({
                   </div>
                 </div>
 
+                {/* Date Validation Alert if any */}
+                {dateError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
+                    {dateError}
+                  </div>
+                )}
+
                 {/* Pure Nightly Rate Breakdown (Strictly NO Service Fee) */}
                 {ratePerNight > 0 && (
                   <div className="space-y-2 text-xs text-gray-600 border-b border-gray-100 pb-4">
@@ -637,8 +769,13 @@ export const ListingDetails = ({
                   <button
                     type="button"
                     onClick={handleBookNow}
+                    disabled={!!dateError || nights <= 0}
                     id="listing-book-now-button"
-                    className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-[#1B4332] hover:bg-[#143427] active:scale-[0.98] transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 border border-[#E8A33D]/30"
+                    className={`w-full py-3.5 px-4 rounded-xl text-sm font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 border border-[#E8A33D]/30 ${
+                      dateError || nights <= 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'text-white bg-[#1B4332] hover:bg-[#143427] active:scale-[0.98]'
+                    }`}
                   >
                     {!isLoggedIn ? (
                       <>
