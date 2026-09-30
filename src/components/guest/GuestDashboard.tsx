@@ -441,8 +441,8 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#FBF6EC] text-[#14231C] flex flex-col">
-      {/* Guest Navigation Header with Tab Switcher */}
+    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col font-sans">
+      {/* Guest Tab Menu */}
       <GuestHeader
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -783,21 +783,8 @@ export const GuestDashboard: React.FC<GuestDashboardProps> = ({
           }}
         />
       )}
-
-      {/* Guest Experience Footer */}
-      <footer className="border-t border-[#1B4332]/10 bg-white/60 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#6B756F]">
-          <div className="flex items-center gap-2">
-            <span className="font-serif font-bold text-[#1B4332]">Ileya Afrika Guest Hub</span>
-            <span>•</span>
-            <span>100% On-Ground Physical Verification Guarantee</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#2D6A4F]" />
-            <span>24/7 Concierge & Escrow Protection</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };
+
+export default GuestDashboard;

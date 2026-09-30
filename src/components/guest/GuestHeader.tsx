@@ -1,253 +1,93 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
-  Building2,
   Compass,
-  ShieldCheck,
-  LogOut,
-  LogIn,
-  User,
-  Luggage,
-  Sparkles,
-  Menu,
-  X
+  Luggage
 } from 'lucide-react';
-import { UserSession, GuestViewTab } from '../../types';
-import { BrandLogo } from '../common/BrandLogo';
+import { GuestViewTab, UserSession } from '../../types';
 
 interface GuestHeaderProps {
   activeTab: GuestViewTab;
   onSelectTab: (tab: GuestViewTab) => void;
-  session: UserSession | null;
-  onLogout: () => void;
-  verifiedCount: number;
-  availableCount: number;
-  bookingsCount: number;
+  session?: UserSession | null;
+  onLogout?: () => void;
+  verifiedCount?: number;
+  availableCount?: number;
+  bookingsCount?: number;
 }
 
+/**
+ * GuestHeader: Local Dashboard Tab Menu
+ * Strict Minimalist Design System:
+ * - Clean white background with subtle gray bottom border (border-b border-gray-200)
+ * - Inactive tabs: simple gray text (text-gray-500 hover:text-gray-700), NO colored backgrounds
+ * - Active tabs: brand green indicator ONLY (text-[#1B4332] border-b-2 border-[#1B4332])
+ * - Lots of breathing room (gap-8, pb-2)
+ * - Stripped of duplicate global logos and logout buttons (managed by Navbar.jsx)
+ */
 export const GuestHeader: React.FC<GuestHeaderProps> = ({
   activeTab,
   onSelectTab,
-  session,
-  onLogout,
-  verifiedCount,
-  availableCount,
-  bookingsCount,
+  bookingsCount = 0,
 }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-[#1B4332]/10 shadow-xs w-full max-w-full overflow-x-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full h-16 sm:h-20 flex items-center justify-between gap-3">
-        {/* Brand Logo & Tagline */}
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 shrink-0">
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#1B4332] flex items-center justify-center text-[#E8A33D] shadow-md shadow-[#1B4332]/20 shrink-0">
-            <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <BrandLogo
-            variant="light"
-            badge="Guest Portal"
-            onClick={() => onSelectTab('explore')}
-          />
+    <div className="bg-white border-b border-gray-200 w-full font-sans">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Title Row */}
+        <div className="pt-6 pb-4">
+          <h1 className="text-2xl font-serif font-bold text-gray-900 tracking-tight">
+            Guest Dashboard
+          </h1>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Discover physically verified Nigerian properties and manage your active reservations.
+          </p>
         </div>
 
-        {/* Center Tabbed Navigation: Explore vs My Bookings (Desktop) */}
-        <nav className="hidden md:flex items-center p-1.5 rounded-2xl bg-[#FBF6EC] border border-[#1B4332]/10 shrink-0">
+        {/* Sleek Horizontal Tab Menu (Strict Colors) */}
+        <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
+          {/* Tab 1: Explore Stays */}
           <button
             type="button"
             id="tab-explore-btn"
             onClick={() => onSelectTab('explore')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               activeTab === 'explore'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-[#6B756F] hover:text-[#14231C] hover:bg-white/60'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
             }`}
           >
-            <Compass className="w-4 h-4 shrink-0" />
-            <span>Explore</span>
+            <Compass className="w-4 h-4" />
+            <span>Explore Properties</span>
           </button>
 
+          {/* Tab 2: My Bookings */}
           <button
             type="button"
             id="tab-my-bookings-btn"
             onClick={() => onSelectTab('my-bookings')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               activeTab === 'my-bookings'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-[#6B756F] hover:text-[#14231C] hover:bg-white/60'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
             }`}
           >
-            <Luggage className="w-4 h-4 shrink-0" />
+            <Luggage className="w-4 h-4" />
             <span>My Bookings</span>
             {bookingsCount > 0 && (
               <span
-                className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === 'my-bookings'
-                    ? 'bg-[#E8A33D] text-[#14231C]'
-                    : 'bg-[#2D6A4F] text-white'
+                    ? 'bg-[#1B4332]/10 text-[#1B4332]'
+                    : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 {bookingsCount}
               </span>
             )}
           </button>
-        </nav>
-
-        {/* User Profile, Action Buttons & Mobile Hamburger */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Desktop User Info */}
-          <div className="hidden lg:flex flex-col text-right min-w-0">
-            <span className="text-xs font-bold text-[#14231C] truncate max-w-36">
-              {session?.fullName || 'Valued Guest'}
-            </span>
-            {session?.email && (
-              <span className="text-[11px] text-[#6B756F] truncate max-w-36">
-                {session.email}
-              </span>
-            )}
-          </div>
-
-          <div className="hidden sm:flex w-9 h-9 rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] items-center justify-center shrink-0">
-            <User className="w-4 h-4" />
-          </div>
-
-          <button
-            type="button"
-            onClick={onLogout}
-            id="guest-logout-btn"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-[#1B4332]/20 text-[#1B4332] hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer shadow-xs shrink-0"
-            title={session?.isAuthenticated ? 'Sign Out of Ileya Afrika' : 'Sign In to Ileya Afrika'}
-          >
-            {session?.isAuthenticated ? (
-              <>
-                <LogOut className="w-3.5 h-3.5 shrink-0" />
-                <span>Sign Out</span>
-              </>
-            ) : (
-              <>
-                <LogIn className="w-3.5 h-3.5 shrink-0" />
-                <span>Sign In</span>
-              </>
-            )}
-          </button>
-
-          {/* Mobile Hamburger Toggle */}
-          <button
-            type="button"
-            id="guest-mobile-menu-toggle"
-            aria-label="Toggle navigation menu"
-            aria-expanded={isMobileMenuOpen}
-            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-            className="md:hidden flex items-center justify-center w-10 h-10 rounded-xl bg-[#FBF6EC] border border-[#1B4332]/15 text-[#1B4332] hover:bg-[#1B4332]/10 transition-all cursor-pointer shrink-0"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-5 h-5 shrink-0" />
-            ) : (
-              <Menu className="w-5 h-5 shrink-0" />
-            )}
-          </button>
         </div>
       </div>
-
-      {/* Mobile Collapsible Navigation Menu */}
-      {isMobileMenuOpen && (
-        <div
-          id="guest-mobile-menu"
-          className="md:hidden border-t border-[#1B4332]/10 bg-white/98 backdrop-blur-md px-4 py-3 space-y-3 w-full max-w-full overflow-x-hidden"
-        >
-          {/* Navigation buttons */}
-          <div className="flex flex-col gap-1.5 w-full">
-            <button
-              type="button"
-              id="mobile-tab-explore-btn"
-              onClick={() => {
-                onSelectTab('explore');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
-                activeTab === 'explore'
-                  ? 'bg-[#1B4332] text-white shadow-xs'
-                  : 'bg-[#FBF6EC] text-[#14231C] hover:bg-[#1B4332]/5'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Compass className="w-4 h-4 shrink-0" />
-                <span>Explore Verified Stays</span>
-              </span>
-            </button>
-
-            <button
-              type="button"
-              id="mobile-tab-my-bookings-btn"
-              onClick={() => {
-                onSelectTab('my-bookings');
-                setIsMobileMenuOpen(false);
-              }}
-              className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
-                activeTab === 'my-bookings'
-                  ? 'bg-[#1B4332] text-white shadow-xs'
-                  : 'bg-[#FBF6EC] text-[#14231C] hover:bg-[#1B4332]/5'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Luggage className="w-4 h-4 shrink-0" />
-                <span>My Bookings</span>
-              </span>
-              {bookingsCount > 0 && (
-                <span
-                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                    activeTab === 'my-bookings'
-                      ? 'bg-[#E8A33D] text-[#14231C]'
-                      : 'bg-[#2D6A4F] text-white'
-                  }`}
-                >
-                  {bookingsCount} {bookingsCount === 1 ? 'booking' : 'bookings'}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Mobile User Profile & Logout */}
-          <div className="pt-2.5 border-t border-[#1B4332]/10 flex items-center justify-between gap-2 w-full">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="w-8 h-8 rounded-xl bg-[#2D6A4F]/10 text-[#2D6A4F] flex items-center justify-center shrink-0">
-                <User className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 flex-1 truncate">
-                <span className="text-xs font-bold text-[#14231C] block truncate">
-                  {session?.fullName || 'Valued Guest'}
-                </span>
-                {session?.email && (
-                  <span className="text-[10px] text-[#6B756F] block truncate">
-                    {session.email}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                onLogout();
-              }}
-              id="mobile-guest-logout-btn"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-[#1B4332]/5 border border-[#1B4332]/15 text-[#1B4332] hover:bg-[#1B4332] hover:text-white transition-all cursor-pointer shrink-0"
-            >
-              {session?.isAuthenticated ? (
-                <>
-                  <LogOut className="w-3.5 h-3.5 shrink-0" />
-                  <span>Sign Out</span>
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-3.5 h-3.5 shrink-0" />
-                  <span>Sign In</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </header>
+    </div>
   );
 };
+
+export default GuestHeader;

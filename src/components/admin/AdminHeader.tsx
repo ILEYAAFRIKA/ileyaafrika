@@ -1,17 +1,12 @@
 import React from 'react';
 import {
-  Building2,
-  ShieldCheck,
   ClipboardList,
   Layers,
+  Calendar,
   Users,
-  LogOut,
-  Sparkles,
-  CreditCard,
   Activity
 } from 'lucide-react';
 import { AdminViewTab, UserSession } from '../../types';
-import { BrandLogo } from '../common/BrandLogo';
 
 interface AdminHeaderProps {
   activeTab: AdminViewTab;
@@ -22,180 +17,140 @@ interface AdminHeaderProps {
   adminCount: number;
   bookingsCount?: number;
   isMasterAdmin: boolean;
-  onLogout: () => void;
+  onLogout?: () => void;
   onRunDiagnostics?: () => void;
 }
 
+/**
+ * AdminHeader: Local Dashboard Tab Menu
+ * Minimalist design system:
+ * - Clean white background with subtle gray bottom border (border-b border-gray-200)
+ * - Inactive tabs: gray text (text-gray-500 hover:text-gray-700), no colored backgrounds
+ * - Active tabs: brand green indicator ONLY (text-[#1B4332] border-b-2 border-[#1B4332])
+ * - Generous whitespace and breathing room (gap-8, pb-2)
+ * - No duplicate logos or global logout buttons (handled globally by Navbar.jsx)
+ */
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
   activeTab,
   onSelectTab,
-  session,
   pendingCount,
   totalListingsCount,
   adminCount,
   bookingsCount = 0,
   isMasterAdmin,
-  onLogout,
   onRunDiagnostics,
 }) => {
   return (
-    <header className="sticky top-0 z-30 bg-[#1B4332] text-white border-b border-[#2D6A4F] shadow-md w-full max-w-full overflow-x-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
-          {/* Logo & Portal Identity */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#2D6A4F] flex items-center justify-center text-[#E8A33D] shadow-sm border border-[#E8A33D]/20 shrink-0">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <BrandLogo
-              variant="dark"
-              badge={isMasterAdmin ? 'Master Admin' : 'Operations Admin'}
-            />
+    <div className="bg-white border-b border-gray-200 w-full font-sans">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Title Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-6 pb-4 gap-3">
+          <div>
+            <h1 className="text-2xl font-serif font-bold text-gray-900 tracking-tight">
+              Admin Operations
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Physical verification audit queue, property directory, and platform governance.
+            </p>
           </div>
 
-          {/* User Profile & Logout Action */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="text-right hidden md:block min-w-0">
-              <div className="text-xs font-semibold text-white flex items-center justify-end gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#E8A33D] shrink-0" />
-                <span className="truncate max-w-48">{session?.fullName || session?.email || 'Operations Admin'}</span>
-              </div>
-              <span className="text-[11px] text-[#FBF6EC]/70">
-                {isMasterAdmin ? 'Master Admin' : 'Operations Staff'}
-              </span>
-            </div>
-
-            {isMasterAdmin && onRunDiagnostics && (
-              <button
-                type="button"
-                onClick={onRunDiagnostics}
-                id="admin-header-diagnostics-btn"
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold px-3 sm:px-3.5 py-2 rounded-xl bg-[#E8A33D] hover:bg-[#d99432] text-[#14231C] shadow-sm transition-all cursor-pointer shrink-0"
-                title="Open and Run Supabase System Diagnostics"
-              >
-                <Activity className="w-3.5 h-3.5 shrink-0" />
-                <span>Run System Diagnostics</span>
-              </button>
-            )}
-
+          {isMasterAdmin && onRunDiagnostics && (
             <button
-              onClick={onLogout}
-              id="admin-signout-btn"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 sm:px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all cursor-pointer shrink-0"
+              type="button"
+              onClick={onRunDiagnostics}
+              id="admin-header-diagnostics-btn"
+              className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-2xs cursor-pointer"
+              title="Open and Run Supabase System Diagnostics"
             >
-              <LogOut className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">Sign Out</span>
+              <Activity className="w-3.5 h-3.5 text-emerald-700" />
+              <span>System Diagnostics</span>
             </button>
-          </div>
+          )}
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar border-t border-[#2D6A4F]/60 pt-2 pb-2 w-full max-w-full">
+        {/* Sleek Horizontal Tab Menu (Strict Color System) */}
+        <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
           {/* Tab 1: Pending Verifications */}
           <button
             type="button"
             onClick={() => onSelectTab('pending-verifications')}
             id="tab-pending-verifications"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               activeTab === 'pending-verifications'
-                ? 'bg-[#E8A33D] text-[#14231C] shadow-sm'
-                : 'text-[#FBF6EC]/80 hover:text-white hover:bg-white/10'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
             }`}
           >
             <ClipboardList className="w-4 h-4" />
             <span>Pending Verifications</span>
-            {pendingCount > 0 ? (
+            {pendingCount > 0 && (
               <span
-                className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === 'pending-verifications'
-                    ? 'bg-[#14231C] text-[#E8A33D]'
-                    : 'bg-[#E8A33D] text-[#14231C]'
+                    ? 'bg-[#1B4332]/10 text-[#1B4332]'
+                    : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 {pendingCount}
               </span>
-            ) : (
-              <span className="text-[10px] opacity-60">0</span>
             )}
           </button>
 
-          {/* Tab 2: All Listings (Geographical Directory) */}
+          {/* Tab 2: All Listings */}
           <button
             type="button"
             onClick={() => onSelectTab('all-listings')}
             id="tab-all-listings"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               activeTab === 'all-listings'
-                ? 'bg-[#E8A33D] text-[#14231C] shadow-sm'
-                : 'text-[#FBF6EC]/80 hover:text-white hover:bg-white/10'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>All Listings Directory</span>
-            <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                activeTab === 'all-listings'
-                  ? 'bg-[#14231C] text-[#E8A33D]'
-                  : 'bg-white/15 text-white'
-              }`}
-            >
-              {totalListingsCount}
-            </span>
+            <span>All Listings</span>
+            <span className="text-[10px] text-gray-400 font-mono">({totalListingsCount})</span>
           </button>
 
-          {/* Tab 3: Bookings Manager */}
+          {/* Tab 3: Bookings */}
           <button
             type="button"
             onClick={() => onSelectTab('bookings')}
-            id="tab-bookings-manager"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+            id="tab-bookings"
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
               activeTab === 'bookings'
-                ? 'bg-[#E8A33D] text-[#14231C] shadow-sm'
-                : 'text-[#FBF6EC]/80 hover:text-white hover:bg-white/10'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
             }`}
           >
-            <CreditCard className="w-4 h-4" />
-            <span>Bookings Manager</span>
+            <Calendar className="w-4 h-4" />
+            <span>Bookings</span>
             {bookingsCount > 0 && (
-              <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  activeTab === 'bookings'
-                    ? 'bg-[#14231C] text-[#E8A33D]'
-                    : 'bg-[#E8A33D] text-[#14231C]'
-                }`}
-              >
-                {bookingsCount}
-              </span>
+              <span className="text-[10px] text-gray-400 font-mono">({bookingsCount})</span>
             )}
           </button>
 
-          {/* Tab 4: Admin Team Management (Master Admin Only) */}
+          {/* Tab 4: Admin Team (Master Admin only) */}
           {isMasterAdmin && (
             <button
               type="button"
               onClick={() => onSelectTab('admin-team')}
               id="tab-admin-team"
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
                 activeTab === 'admin-team'
-                  ? 'bg-[#E8A33D] text-[#14231C] shadow-sm'
-                  : 'text-[#FBF6EC]/80 hover:text-white hover:bg-white/10'
+                  ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Admin Team Management</span>
-              <span
-                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  activeTab === 'admin-team'
-                    ? 'bg-[#14231C] text-[#E8A33D]'
-                    : 'bg-white/15 text-white'
-                }`}
-              >
-                {adminCount}
-              </span>
+              <span>Admin Team</span>
+              <span className="text-[10px] text-gray-400 font-mono">({adminCount})</span>
             </button>
           )}
         </div>
       </div>
-    </header>
+    </div>
   );
 };
+
+export default AdminHeader;

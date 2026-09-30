@@ -479,33 +479,43 @@ export const HostDashboard: React.FC<HostDashboardProps> = ({
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Top Toggle Switch */}
-      <div className="flex items-center justify-between pb-4 border-b border-[#1B4332]/10">
-        <div>
-          <h1 className="text-2xl font-bold font-serif text-[#1B4332]">Host Management</h1>
-          <p className="text-xs text-[#6B756F]">Manage your short-let apartments and track verification status</p>
+    <div className="max-w-7xl mx-auto space-y-6 font-sans">
+      {/* Local Dashboard Tab Menu (Strict Color System) */}
+      <div className="bg-white border-b border-gray-200 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 mb-6">
+        <div className="pt-6 pb-4">
+          <h1 className="text-2xl font-bold font-serif text-gray-900 tracking-tight">Host Management</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Manage your short-let apartments and track verification status</p>
         </div>
-        <div className="flex items-center gap-2">
-          {activeTab === 'listings' ? (
-            <button
-              onClick={() => setActiveTab('new-listing')}
-              id="create-new-listing-btn"
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#E8A33D] hover:bg-[#d99530] text-[#14231C] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Add New Listing</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setActiveTab('listings')}
-              id="view-my-listings-btn"
-              className="px-4 py-2 rounded-xl text-xs font-bold text-[#1B4332] bg-white border border-[#1B4332]/20 hover:bg-[#FBF6EC] transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to Listings</span>
-            </button>
-          )}
+
+        <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setActiveTab('listings')}
+            id="tab-my-properties-btn"
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeTab === 'listings'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>My Properties</span>
+            <span className="text-[10px] text-gray-400 font-mono">({listings.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('new-listing')}
+            id="tab-add-property-btn"
+            className={`pb-3 text-sm font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-2 ${
+              activeTab === 'new-listing'
+                ? 'text-[#1B4332] border-b-2 border-[#1B4332]'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent'
+            }`}
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Add Property</span>
+          </button>
         </div>
       </div>
 

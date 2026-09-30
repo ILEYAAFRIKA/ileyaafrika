@@ -455,7 +455,7 @@ function MainApp() {
       currentRoute.startsWith('/host/')
     ) {
       return (
-        <div className="bg-[#FBF6EC] min-h-[calc(100vh-140px)] text-[#14231C] flex flex-col">
+        <div className="bg-gray-50 min-h-[calc(100vh-140px)] text-gray-900 flex flex-col font-sans">
           <HostHeader
             activeTab={hostActiveTab}
             onSelectTab={handleHostTabSelect}
